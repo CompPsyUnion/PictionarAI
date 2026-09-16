@@ -13,10 +13,14 @@ function show(id) {
   if (id !== 'result') for (const stage of document.querySelectorAll('.ribbon-stage')) stage.remove();
   // The header button is a way back out of the library only: it never shows
   // on the welcome, quiz or result screens, so participants cannot find it.
-  $('manage').hidden = id !== 'library';
+  // index.html has no library, and therefore no button either.
+  const back = $('manage');
+  if (back) back.hidden = id !== 'library';
   window.scrollTo(0, 0);
 }
-function storageMessage(text) { $('storage-note').textContent = text; }
+// index.html carries no library markup, so every element below is optional
+// and must be guarded: the same script serves both pages.
+function storageMessage(text) { const note = $('storage-note'); if (note) note.textContent = text; }
 function openDatabase() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open('picture-this-event', 1);
@@ -36,13 +40,20 @@ function databaseAction(mode, action) {
   });
 }
 function refresh() {
-  $('start').disabled = importing || pictures.length < Quiz.MIN_PICTURES;
-  $('ready').hidden = pictures.length >= Quiz.MIN_PICTURES;
-  $('ready').textContent = pictures.length >= Quiz.MIN_PICTURES ? '' : `Organizer: open Admin and add ${Quiz.MIN_PICTURES - pictures.length} more picture${Quiz.MIN_PICTURES - pictures.length === 1 ? '' : 's'} to begin.`;
+  // index.html carries the welcome markup, admin.html carries the library.
+  // Each page only has the half it needs, so both are guarded.
+  const startButton = $('start'), ready = $('ready');
+  if (startButton) startButton.disabled = importing || pictures.length < Quiz.MIN_PICTURES;
+  if (ready) {
+    ready.hidden = pictures.length >= Quiz.MIN_PICTURES;
+    ready.textContent = pictures.length >= Quiz.MIN_PICTURES ? '' : `Organizer: open Admin and add ${Quiz.MIN_PICTURES - pictures.length} more picture${Quiz.MIN_PICTURES - pictures.length === 1 ? '' : 's'} to begin.`;
+  }
+  const count = $('library-count'), gallery = $('gallery');
+  if (!count || !gallery) return;
   const ai = pictures.filter(p => p.isAI).length;
-  $('library-count').textContent = `${pictures.length} pictures · ${ai} AI · ${pictures.length - ai} real`;
+  count.textContent = `${pictures.length} pictures · ${ai} AI · ${pictures.length - ai} real`;
   galleryURLs.forEach(url => URL.revokeObjectURL(url)); galleryURLs.length = 0;
-  $('gallery').replaceChildren();
+  gallery.replaceChildren();
   for (const picture of pictures) {
     const tile = document.createElement('div'); tile.className = 'tile';
     const img = document.createElement('img'); img.src = URL.createObjectURL(picture.blob); galleryURLs.push(img.src); img.alt = picture.isAI ? 'AI-generated library picture' : 'Real library photograph'; img.loading = 'lazy';
@@ -54,7 +65,7 @@ function refresh() {
       try { if (db) await databaseAction('readwrite', store => picture.id.startsWith('bundled-') ? store.put({ id: picture.id, removed: true }) : store.delete(picture.id)); pictures = pictures.filter(p => p.id !== picture.id); refresh(); }
       catch { storageMessage('Could not remove this picture. Please try again.'); }
     };
-    bottom.append(label, remove); tile.append(img, bottom); $('gallery').append(tile);
+    bottom.append(label, remove); tile.append(img, bottom); gallery.append(tile);
   }
 }
 async function validImage(file) {
@@ -65,7 +76,9 @@ async function validImage(file) {
 }
 async function importPictures(files, isAI) {
   if (importing) return;
-  importing = true; $('ai-files').disabled = $('real-files').disabled = true; refresh();
+  // The file inputs live on admin.html; on index.html there is nothing to lock.
+  const inputs = [$('ai-files'), $('real-files')].filter(Boolean);
+  importing = true; inputs.forEach(input => input.disabled = true); refresh();
   let added = 0, skipped = 0, failed = 0;
   for (const file of files) {
     storageMessage(`Importing picture ${added + skipped + failed + 1} of ${files.length}…`);
@@ -74,8 +87,7 @@ async function importPictures(files, isAI) {
     try { if (db) await databaseAction('readwrite', store => store.add(picture)); pictures.push(picture); added++; }
     catch { failed++; }
   }
-  importing = false; $('ai-files').disabled = $('real-files').disabled = false;
-  $('ai-files').value = $('real-files').value = ''; refresh();
+  importing = false; inputs.forEach(input => { input.disabled = false; input.value = ''; }); refresh();
   storageMessage(`${added} picture${added === 1 ? '' : 's'} added.${skipped ? ` ${skipped} unsupported or unreadable file(s) skipped.` : ''}${failed ? ` ${failed} could not be saved; browser storage may be full.` : ''} ${db ? 'Stored locally in this browser. Keep the same browser profile and app location for the event; retain your original image files as a backup.' : 'Temporary session only: browser storage is unavailable. Keep this tab open; reload will clear the library.'}`);
 }
 function start() {
@@ -168,19 +180,30 @@ for (const release of ['pointerup', 'pointercancel', 'pointerleave']) {
     if (button) button.classList.remove('pressing');
   });
 }
-$('ai-files').onchange = event => importPictures([...event.target.files], true);
-$('real-files').onchange = event => importPictures([...event.target.files], false);
-// On admin.html the button leaves the page entirely so the URL never keeps
-// /admin.html in the address bar; './' resolves to the site root rather than
-// an explicit index.html. On index.html it just switches screens.
-$('manage').onclick = () => { if (startScreen === 'library') location.href = './'; else show('home'); };
-$('home-link').onclick = event => { event.preventDefault(); if (startScreen === 'library') { location.href = './'; return; } if (!$('game').hidden && !confirm('End this game and return to the welcome screen?')) return; show('home'); };
+const aiInput = $('ai-files'), realInput = $('real-files');
+if (aiInput) aiInput.onchange = event => importPictures([...event.target.files], true);
+if (realInput) realInput.onchange = event => importPictures([...event.target.files], false);
+// The header button exists on admin.html only, where it leaves the page
+// entirely so the URL never keeps /admin.html in the address bar. './'
+// resolves to the site root rather than an explicit index.html.
+const backButton = $('manage');
+if (backButton) backButton.onclick = () => { location.href = './'; };
+$('home-link').onclick = event => {
+  event.preventDefault();
+  if (startScreen === 'library') { location.href = './'; return; }
+  const quiz = $('game');
+  if (quiz && !quiz.hidden && !confirm('End this game and return to the welcome screen?')) return;
+  show('home');
+};
 // Switch screens before the database work starts: opening IndexedDB and
 // decoding the bundled photographs takes long enough to be visible, so the
 // library must not wait for it. refresh() fills the grid in when it resolves.
 if (startScreen === 'library') show('library');
-$('start').onclick = start;
-$('abort').onclick = () => {
+// Everything below belongs to the quiz, which lives on index.html only.
+// bind() skips any element the current page does not contain.
+function bind(id, handler) { const element = $(id); if (element) element.onclick = handler; }
+bind('start', start);
+bind('abort', () => {
   game = null;
   round = 0;
   $('question-image').onload = $('question-image').onerror = null;
@@ -190,10 +213,10 @@ $('abort').onclick = () => {
   $('feedback').hidden = true;
   show('home');
   $('start').focus();
-};
-$('back-home').onclick = () => show('home');
-$('yes').onclick = () => submit(true); $('no').onclick = () => submit(false);
-$('next').onclick = () => { if (game.answers.length !== round + 1) return; if (Quiz.passed(game)) finish(); else { round = Quiz.next(game); renderRound(); } };
+});
+bind('back-home', () => show('home'));
+bind('yes', () => submit(true)); bind('no', () => submit(false));
+bind('next', () => { if (game.answers.length !== round + 1) return; if (Quiz.passed(game)) finish(); else { round = Quiz.next(game); renderRound(); } });
 (async () => {
   try { db = await openDatabase(); pictures = await databaseAction('readonly', store => store.getAll()); storageMessage('Pictures are stored locally in this browser. Keep the same browser profile and app location, and retain your original files as a backup.'); }
   catch { db = null; storageMessage('Browser storage is unavailable. Pictures will work for this session only. Keep this tab open during the event.'); }

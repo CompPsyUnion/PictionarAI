@@ -10,7 +10,7 @@
   <script defer src="app.js"></script>
 </head>
 <body>
-  <header><a class="brand" href="#" id="home-link"><img class="crossover-logo" src="assets/crossover-logo-transparent.png" alt="Computer Psycho Union × AI Robotics"><span class="brand-copy"><span class="brand-name">PictionarAI</span><span class="brand-subtitle">Compile, Play, Unite: Adventure in Intelligence &amp; Mecha</span></span></a><button class="quiet" id="manage" hidden>Back <span aria-hidden="true">↗</span></button></header>
+  <header><a class="brand" href="#" id="home-link"><img class="crossover-logo" src="assets/crossover-logo-transparent.png" alt="Computer Psycho Union × AI Robotics"><span class="brand-copy"><span class="brand-name">PictionarAI</span><span class="brand-subtitle">Compile, Play, Unite: Adventure in Intelligence &amp; Mecha</span></span></a></header>
   <main>
     <section id="home" class="screen hero">
       <div class="eyebrow"><span class="dot"></span> TRUST YOUR EYES. OR SHOULD YOU?</div>
@@ -21,19 +21,6 @@
       <button class="primary" id="start" disabled>Let’s go <span>→</span></button>
       <p id="ready" class="muted" role="status">Loading pictures…</p>
       <div class="hero-note">HUMAN INSTINCT vs. ARTIFICIAL INTELLIGENCE</div>
-    </section>
-
-    <section id="library" class="screen" hidden>
-      <div class="eyebrow">EVENT SETUP</div><h2>Admin</h2>
-      <p class="intro small">Add your pictures and label them correctly. Each game draws pictures randomly from this library until the participant answers two correctly in a row.</p>
-      <div class="upload-grid">
-        <label class="upload"><span class="upload-icon">✳</span><strong>AI-generated pictures</strong><span>Images created using artificial intelligence</span><span class="file-button">Choose pictures +</span><input id="ai-files" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" multiple></label>
-        <label class="upload"><span class="upload-icon">◎</span><strong>Real pictures</strong><span>Authentic photographs from the real world</span><span class="file-button">Choose pictures +</span><input id="real-files" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/avif" multiple></label>
-      </div>
-      <p class="muted">PNG, JPG, WebP, GIF or AVIF. Use at least two pictures in total; include both categories for a better challenge. Labels and filenames stay hidden during play.</p>
-      <p id="storage-note" class="notice" role="status"></p>
-      <div class="library-toolbar"><h3 id="library-count">0 pictures</h3></div>
-      <div id="gallery" class="gallery"></div>
     </section>
 
     <section id="game" class="screen game" hidden>
