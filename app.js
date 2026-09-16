@@ -105,7 +105,7 @@ function submit(choice) {
 }
 function finish() {
   if (!Quiz.passed(game)) return;
-  $('result-title').textContent = 'You’ve got the eye.';
+  $('result-title').textContent = 'Congratulations!';
   $('result-description').textContent = 'You got two pictures right in a row. Challenge passed!';
   $('final-score').textContent = game.streak;
   $('result-rounds').textContent = `${game.answers.length} pictures answered`;
