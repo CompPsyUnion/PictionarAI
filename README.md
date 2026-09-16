@@ -9,7 +9,7 @@ Open `index.html` in a modern desktop browser such as Chrome or Edge. No install
 3. Add at least two pictures total. Include both categories for a more interesting game. Supported formats: JPG, PNG, WebP, GIF and AVIF.
 4. Click **Done**, then **Let’s find out**. For a kiosk presentation, use the browser’s fullscreen option (usually F11).
 
-The question is always **“Is this AI-generated?”** YES means AI-generated; NO means real. Participants pass as soon as they answer **two consecutive pictures correctly**. An incorrect answer resets the current streak to zero. There is no fixed round limit or automatic failure: continue until the participant passes. Feedback appears after each answer; after the qualifying answer, **See my result** opens the conclusion page. **Back to Welcome** returns to the welcome screen, where starting a new game resets the streak.
+The question is always **“Is this AI-generated?”** AI means it's AI-generated; Real means genuine stuff. Participants pass as soon as they answer **two consecutive pictures correctly**. An incorrect answer resets the current streak to zero. There is no fixed round limit or automatic failure: continue until the participant passes. Feedback appears after each answer; after the qualifying answer, **See my result** opens the conclusion page. **Back to Welcome** returns to the welcome screen, where starting a new game resets the streak.
 
 Pictures are shuffled and shown without repeats until the library is exhausted, then reshuffled as needed. The first image in a new batch cannot be the same as the preceding image. For example, correct / wrong / correct does not pass; correct / wrong / correct / correct passes on the fourth picture.
 
