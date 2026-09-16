@@ -1,15 +1,19 @@
-# Picture This — local event quiz
+# PictionarAI — local event quiz
 
 Open `index.html` in a modern desktop browser such as Chrome or Edge. No installation, server, account or internet connection is required.
 
 ## Set up the event
 
-1. Open **Picture library**.
+1. Open **Admin**.
 2. Select your AI-generated images under **AI-generated pictures**, and authentic photos under **Real pictures**. You can select multiple files at once.
-3. Add at least five pictures total. Include both categories for a more interesting game. Supported formats: JPG, PNG, WebP, GIF and AVIF.
+3. Add at least two pictures total. Include both categories for a more interesting game. Supported formats: JPG, PNG, WebP, GIF and AVIF.
 4. Click **Done**, then **Let’s find out**. For a kiosk presentation, use the browser’s fullscreen option (usually F11).
 
-The question is always **“Is this AI-generated?”** YES means AI-generated; NO means real. A correct answer earns one point, an incorrect answer earns zero. There are exactly five rounds, with five randomly selected pictures and no repeats within a game. Three, four or five points is a PASS; zero, one or two is a FAIL. Feedback appears after every answer. **Next participant** starts a new random game with a score of zero. Pictures may repeat between participants.
+The question is always **“Is this AI-generated?”** YES means AI-generated; NO means real. Participants pass as soon as they answer **two consecutive pictures correctly**. An incorrect answer resets the current streak to zero. There is no fixed round limit or automatic failure: continue until the participant passes. Feedback appears after each answer; after the qualifying answer, **See my result** opens the conclusion page. **Back to Welcome** returns to the welcome screen, where starting a new game resets the streak.
+
+Pictures are shuffled and shown without repeats until the library is exhausted, then reshuffled as needed. The first image in a new batch cannot be the same as the preceding image. For example, correct / wrong / correct does not pass; correct / wrong / correct / correct passes on the fourth picture.
+
+活动规则：参与者依次观察随机图片，判断是否由 AI 生成。任意连续判断成功两次即合格；答错则连续次数归零，不设固定轮数。
 
 ## Storage and practical notes
 
