@@ -3,9 +3,17 @@ const $ = id => document.getElementById(id);
 let pictures = [], db = null, game = null, round = 0, importing = false;
 let questionURL = null;
 const galleryURLs = [];
+// admin.html sets this flag before loading app.js, so the same script boots
+// straight into the library there while index.html always opens on welcome.
+const startScreen = window.PICTIONARAI_START === 'library' ? 'library' : 'home';
 function show(id) {
   for (const section of document.querySelectorAll('.screen')) section.hidden = section.id !== id;
-  $('manage').hidden = id === 'game';
+  // Ribbons belong to the result screen only: leaving it must clear any that
+  // are still falling, otherwise they linger over the next screen.
+  if (id !== 'result') for (const stage of document.querySelectorAll('.ribbon-stage')) stage.remove();
+  // The header button is a way back out of the library only: it never shows
+  // on the welcome, quiz or result screens, so participants cannot find it.
+  $('manage').hidden = id !== 'library';
   window.scrollTo(0, 0);
 }
 function storageMessage(text) { $('storage-note').textContent = text; }
@@ -57,7 +65,7 @@ async function validImage(file) {
 }
 async function importPictures(files, isAI) {
   if (importing) return;
-  importing = true; $('ai-files').disabled = $('real-files').disabled = $('done').disabled = true; refresh();
+  importing = true; $('ai-files').disabled = $('real-files').disabled = true; refresh();
   let added = 0, skipped = 0, failed = 0;
   for (const file of files) {
     storageMessage(`Importing picture ${added + skipped + failed + 1} of ${files.length}…`);
@@ -66,7 +74,7 @@ async function importPictures(files, isAI) {
     try { if (db) await databaseAction('readwrite', store => store.add(picture)); pictures.push(picture); added++; }
     catch { failed++; }
   }
-  importing = false; $('ai-files').disabled = $('real-files').disabled = $('done').disabled = false;
+  importing = false; $('ai-files').disabled = $('real-files').disabled = false;
   $('ai-files').value = $('real-files').value = ''; refresh();
   storageMessage(`${added} picture${added === 1 ? '' : 's'} added.${skipped ? ` ${skipped} unsupported or unreadable file(s) skipped.` : ''}${failed ? ` ${failed} could not be saved; browser storage may be full.` : ''} ${db ? 'Stored locally in this browser. Keep the same browser profile and app location for the event; retain your original image files as a backup.' : 'Temporary session only: browser storage is unavailable. Keep this tab open; reload will clear the library.'}`);
 }
@@ -77,9 +85,15 @@ function start() {
 function renderStreak() {
   $('score').textContent = game.streak;
   $('progress').setAttribute('aria-label', `${game.streak} of ${Quiz.TARGET} consecutive correct answers`);
-  $('progress').replaceChildren(...Array.from({ length: Quiz.TARGET }, (_, index) => {
-    const item = document.createElement('span'); item.className = index < game.streak ? 'correct' : ''; return item;
-  }));
+  // Segments are created once and only re-classed afterwards: rebuilding
+  // them would skip the CSS transition and jump straight to the final state.
+  while ($('progress').childElementCount < Quiz.TARGET) $('progress').append(document.createElement('span'));
+  const items = [...$('progress').children];
+  items.forEach((item, index) => {
+    // The left transform-origin makes the fill grow rightwards when a
+    // segment turns green and retract leftwards when the streak resets.
+    item.classList.toggle('correct', index < game.streak);
+  });
 }
 function renderRound() {
   $('round').textContent = `PICTURE ${String(round + 1).padStart(2, '0')}`;
@@ -107,15 +121,64 @@ function finish() {
   if (!Quiz.passed(game)) return;
   $('result-title').textContent = 'Congratulations!';
   $('result-description').textContent = 'You got two pictures right in a row. Challenge passed!';
-  $('final-score').textContent = game.streak;
   $('result-rounds').textContent = `${game.answers.length} pictures answered`;
   show('result');
+  celebrate();
+}
+// Real 3D ribbons: each piece is a DOM element animated with rotateX/rotateY
+// inside a perspective container, so it flips through space instead of
+// spinning as a flat rectangle. Pieces remove themselves when they land.
+function celebrate() {
+  const colors = ['#e5433f', '#f2a93b', '#f2e14c', '#5fb85f', '#3f8ee5'];
+  for (const leftover of document.querySelectorAll('.ribbon-stage')) leftover.remove();
+  const stage = document.createElement('div');
+  stage.className = 'ribbon-stage';
+  stage.setAttribute('aria-hidden', 'true');
+  document.body.append(stage);
+  for (let index = 0; index < 140; index++) {
+    const piece = document.createElement('span');
+    piece.className = 'ribbon';
+    const width = 8 + Math.random() * 10;
+    const height = width * (1.6 + Math.random() * 1.4);
+    const duration = 2.6 + Math.random() * 2.2;
+    piece.style.cssText =
+      `left:${Math.random() * 100}%;` +
+      `width:${width}px;height:${height}px;` +
+      `background:${colors[index % colors.length]};` +
+      `animation-duration:${duration}s;` +
+      `animation-delay:${Math.random() * .9}s;` +
+      `--drift:${(Math.random() * 2 - 1) * 240}px;` +
+      `--spin:${(Math.random() * 2 - 1) * 1080}deg;` +
+      `--tumble:${(Math.random() * 2 - 1) * 900}deg;`;
+    stage.append(piece);
+  }
+  setTimeout(() => stage.remove(), 6500);
+}
+// Touch browsers can drop the :active state during a press, so the sunken
+// look is driven by pointer events instead. pointercancel and pointerleave
+// release the button if the finger slides away or the gesture is taken over.
+const pressable = 'button:not(:disabled)';
+document.addEventListener('pointerdown', event => {
+  const button = event.target.closest(pressable);
+  if (button) button.classList.add('pressing');
+});
+for (const release of ['pointerup', 'pointercancel', 'pointerleave']) {
+  document.addEventListener(release, event => {
+    const button = event.target.closest(pressable);
+    if (button) button.classList.remove('pressing');
+  });
 }
 $('ai-files').onchange = event => importPictures([...event.target.files], true);
 $('real-files').onchange = event => importPictures([...event.target.files], false);
-$('manage').onclick = () => show('library');
-$('done').onclick = () => show('home');
-$('home-link').onclick = event => { event.preventDefault(); if (!$('game').hidden && !confirm('End this game and return to the welcome screen?')) return; show('home'); };
+// On admin.html the button leaves the page entirely so the URL never keeps
+// /admin.html in the address bar; './' resolves to the site root rather than
+// an explicit index.html. On index.html it just switches screens.
+$('manage').onclick = () => { if (startScreen === 'library') location.href = './'; else show('home'); };
+$('home-link').onclick = event => { event.preventDefault(); if (startScreen === 'library') { location.href = './'; return; } if (!$('game').hidden && !confirm('End this game and return to the welcome screen?')) return; show('home'); };
+// Switch screens before the database work starts: opening IndexedDB and
+// decoding the bundled photographs takes long enough to be visible, so the
+// library must not wait for it. refresh() fills the grid in when it resolves.
+if (startScreen === 'library') show('library');
 $('start').onclick = start;
 $('abort').onclick = () => {
   game = null;
