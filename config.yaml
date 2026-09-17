@@ -1,0 +1,26 @@
+# Game rules for PictionarAI.
+# Edit the values below and reload the page: no rebuild or redeploy is needed.
+
+# How many pictures a participant judges at once.
+group-size: 3
+
+# How long a round lasts, in seconds.
+round-seconds: 60
+
+# true  = clean groups must come one after another; any mistake resets the
+#         count, so the participant starts the run again.
+# false = clean groups only need to add up; a mistake costs that group but
+#         leaves the ones already banked alone.
+consecutive: true
+
+# How many clean groups are needed to pass. A group is clean only when every
+# picture in it is judged correctly.
+groups-to-pass: 2
+
+# Only read when consecutive is false: how many groups the round schedules.
+total-groups: 5
+
+# Only read when consecutive is false. true stops the round the moment the
+# target is reached; false plays out every scheduled group and decides at the
+# end. A round that can no longer reach the target ends early either way.
+early-pass: true

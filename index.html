@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PictionarAI — AI or Real?</title>
   <link rel="stylesheet" href="style.css">
+  <script defer src="config.js"></script>
   <script defer src="quiz.js"></script>
   <script defer src="app.js"></script>
 </head>
@@ -15,14 +16,14 @@
       <div class="eyebrow"><span class="dot"></span> TRUST YOUR EYES. OR SHOULD YOU?</div>
       <h1>Real world OR <em>artificial?</em></h1>
       <p class="intro">Can you spot AI's disguise?</p>
-      <p class="game-rules">Each group shows <strong>three pictures</strong>. <br>Choose <strong>AI</strong> or <strong>Real</strong> for every picture. <br>Get <strong>two clean groups in a row</strong> within <strong>60 seconds</strong> to pass. A wrong picture resets your streak.</p>
+      <p class="game-rules" id="game-rules"></p>
       <button class="primary" id="start" disabled>Let’s go <span>→</span></button>
       <p id="ready" class="muted" role="status">Loading pictures…</p>
       <div class="hero-note">HUMAN INSTINCT vs. ARTIFICIAL INTELLIGENCE</div>
     </section>
 
     <section id="game" class="screen game" hidden>
-      <div class="game-top"><span id="round" class="eyebrow">GROUP 01</span><span class="score-pill">GROUPS <strong id="score">0</strong> / 2 <span class="pill-divider" aria-hidden="true"></span> <span id="timer" class="timer" role="timer">60</span></span><button class="quiet" id="abort" type="button" aria-label="Abort game and return to welcome">Abort</button></div>
+      <div class="game-top"><span id="round" class="eyebrow">GROUP 01</span><span class="score-pill"><span id="score-label">GROUPS</span> <strong id="score">0</strong> / <span id="score-target">2</span> <span class="pill-divider" aria-hidden="true"></span> <span id="timer" class="timer" role="timer">60</span></span><button class="quiet" id="abort" type="button" aria-label="Abort game and return to welcome">Abort</button></div>
       <div id="progress" class="progress" aria-label="Consecutive correct groups"></div>
       <h2 class="game-question">Is each of these AI-generated?</h2>
       <div id="group" class="group"></div>
@@ -36,6 +37,6 @@
       <button class="primary" id="back-home">Back to Welcome <span>→</span></button>
     </section>
   </main>
-  <footer><span>PictionarAI / HELLO FESTIVAL</span><span>THREE PICTURES PER GROUP · TWO CLEAN GROUPS IN A ROW · 60 SECONDS</span></footer>
+  <footer><span>PictionarAI / HELLO FESTIVAL</span><span id="footer-rules"></span></footer>
 </body>
 </html>
