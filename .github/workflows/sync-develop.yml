@@ -1,0 +1,95 @@
+name: Sync Develop Branch
+
+# Keeps develop fast-forwarded to main. Runs on every push to main (and
+# manually). Creates develop if missing; fails loudly with a step summary when
+# develop has commits that are not in main.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # allow manual runs
+
+permissions:
+  contents: write # required to push to develop
+
+jobs:
+  sync-develop:
+    name: Sync develop branch with main
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # full history for branch operations
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch branches
+        run: |
+          git fetch origin main
+          git fetch origin develop
+
+      - name: Check if develop branch exists
+        id: check-develop
+        run: |
+          if git show-ref --verify --quiet refs/remotes/origin/develop; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "develop branch exists"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "develop branch does not exist"
+          fi
+
+      - name: Create develop branch if it doesn't exist
+        if: steps.check-develop.outputs.exists == 'false'
+        run: |
+          git checkout -b develop
+          git push origin develop
+          echo "develop branch created and pushed"
+
+      - name: Sync develop with main
+        if: steps.check-develop.outputs.exists == 'true'
+        run: |
+          git checkout develop
+
+          DEVELOP_BEFORE=$(git rev-parse HEAD)
+          MAIN_COMMIT=$(git rev-parse origin/main)
+          echo "develop before sync: $DEVELOP_BEFORE"
+          echo "main commit:         $MAIN_COMMIT"
+
+          if [ "$DEVELOP_BEFORE" = "$MAIN_COMMIT" ]; then
+            echo "develop is already up to date with main"
+            exit 0
+          fi
+
+          if git merge --ff-only origin/main; then
+            git push origin develop
+            echo "develop synced with main: $(git rev-parse HEAD)"
+          else
+            echo "Fast-forward merge failed — develop likely has commits that are not in main."
+            DIVERGED_COMMITS=$(git rev-list --count origin/main..develop)
+            echo "Commits in develop not in main: $DIVERGED_COMMITS"
+            git log --oneline origin/main..develop
+            echo "Consider creating a pull request to merge develop into main first."
+            exit 1
+          fi
+
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## Develop Branch Sync Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Main commit**: \`$(git rev-parse origin/main 2>/dev/null || echo 'n/a')\`" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.check-develop.outputs.exists }}" = "true" ]; then
+            echo "- **Develop branch**: Existed and processed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- **Develop branch**: Created from main" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "- **Status**: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
