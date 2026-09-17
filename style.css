@@ -30,6 +30,10 @@ button, input {
 
 button {
   cursor: pointer;
+  /* Removes the 300ms tap delay and stops the browser from hijacking the
+     press gesture, which otherwise cancels :active on touch devices. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 button:disabled {
@@ -93,6 +97,21 @@ header {
 
 .quiet span {
   margin-left: 12px;
+}
+
+/* Abort sits in the quiz header and must stay noticeable without
+   competing with the answer buttons: outlined, flat and green-toned. */
+.quiet#abort {
+  border: 1px solid #cdd5c1;
+  border-radius: 7px;
+  background: #eeefdf;
+  padding: 10px 18px;
+  color: #4c5b34;
+}
+
+.quiet#abort:hover {
+  background: #e2e4d1;
+  color: var(--ink);
 }
 
 /* Page layout and typography */
@@ -203,10 +222,23 @@ h3 {
   font-weight: 700;
   font-size: 16px;
   box-shadow: 0 3px 0 var(--ink);
+  /* Same press feedback as the answer buttons. The margin compensates
+     for the shadow so the button keeps its original footprint. */
+  margin-bottom: 3px;
+  transform: translateY(0);
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
 }
 
 .primary:hover:not(:disabled) {
   background: #b5e659;
+}
+
+/* The .pressing class mirrors :active because touch browsers can cancel the
+   :active state mid-gesture, which made the button only react on release. */
+.primary:active:not(:disabled),
+.primary.pressing:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--ink);
 }
 
 .primary span {
@@ -384,18 +416,32 @@ footer {
 }
 
 .progress span {
+  position: relative;
   height: 5px;
   flex: 1;
   background: #dfe3d6;
   border-radius: 5px;
 }
 
-.progress .active {
-  background: #82956c;
+/* The green fill is a scaled layer rather than a flat background colour,
+   so each segment can slide in from the left and retract to the right. */
+.progress span::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #8ac440;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform .35s ease, background-color .35s ease;
 }
 
-.progress .correct {
-  background: #8ac440;
+.progress span.correct::after {
+  transform: scaleX(1);
+}
+
+.progress .active {
+  background: #82956c;
 }
 
 .progress .wrong {
@@ -448,6 +494,22 @@ footer {
   min-width: 140px;
   font-weight: 800;
   font-size: 23px;
+  /* Physical depth: a solid black edge under the button, matching the
+     stacked look already used by .primary. The margin compensates for
+     the shadow so the row height stays unchanged. */
+  box-shadow: 0 4px 0 var(--ink);
+  margin-bottom: 4px;
+  transform: translateY(0);
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+
+/* Pressing sinks the button into its own shadow, narrowing the visible
+   edge and reading as a physical press. .pressing mirrors :active for
+   touch devices where the pseudo-class is unreliable. */
+.answer:active:not(:disabled),
+.answer.pressing:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--ink);
 }
 
 .answer span {
@@ -457,12 +519,24 @@ footer {
   margin-top: 5px;
 }
 
+/* AI (pale red) and Real (pale blue) are matched in lightness and
+   saturation, so neither button may hint at the correct answer. */
 .yes {
-  background: var(--green);
+  background: #f6cfcf;
+  color: #0a140d;
+}
+
+.yes:hover:not(:disabled) {
+  background: #f0bdbd;
 }
 
 .no {
-  background: #fff;
+  background: #ccdcf2;
+  color: #0a140d;
+}
+
+.no:hover:not(:disabled) {
+  background: #b8cdec;
 }
 
 .feedback {
@@ -500,6 +574,19 @@ footer {
 
 .result-badge.fail {
   background: #ecd7c9;
+}
+
+/* Centre the result content vertically: masthead 166px is the shared
+   header/footer allowance used by main, plus its 48px top and 65px
+   bottom padding. The inherited .hero top padding is cancelled so the
+   block sits optically centred. */
+#result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 166px - 113px);
+  padding-top: 0;
 }
 
 #result h1 {
@@ -751,4 +838,37 @@ footer {
     font-size: 5.5vw;
   }
 
+}
+
+/* Result screen: 3D ribbon celebration.
+   The stage owns the perspective so each piece flips in real 3D space
+   rather than rotating as a flat rectangle. */
+
+.ribbon-stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  perspective: 800px;
+  z-index: 999;
+}
+
+.ribbon {
+  position: absolute;
+  top: -12vh;
+  border-radius: 2px;
+  opacity: .95;
+  animation-name: ribbon-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
+
+@keyframes ribbon-fall {
+  from {
+    transform: translate3d(0, 0, 0) rotateX(0) rotateY(0) rotateZ(0);
+  }
+
+  to {
+    transform: translate3d(var(--drift), 118vh, 0) rotateX(var(--tumble)) rotateY(var(--spin)) rotateZ(var(--spin));
+  }
 }
