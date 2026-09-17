@@ -1,8 +1,4 @@
-/* PictionarAI stylesheet.
- * Original cascade order is preserved, including responsive overrides.
- */
 
-/* Theme and defaults */
 
 :root {
   font-family: Arial, Helvetica, sans-serif;
@@ -10,11 +6,10 @@
   background: #f5f5ec;
   font-synthesis: none;
   --green: #c5f36b;
+  --green-deep: #82b32c;
   --ink: #19261f;
   --muted: #6d7469;
 }
-
-/* Reset and accessibility */
 
 * {
   box-sizing: border-box;
@@ -22,6 +17,9 @@
 
 body {
   margin: 0;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
 }
 
 button, input {
@@ -30,8 +28,6 @@ button, input {
 
 button {
   cursor: pointer;
-  /* Removes the 300ms tap delay and stops the browser from hijacking the
-     press gesture, which otherwise cancels :active on touch devices. */
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
@@ -41,7 +37,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button:focus-visible, a:focus-visible, .upload:focus-within {
+button:focus-visible, a:focus-visible {
   outline: 3px solid #517b1b;
   outline-offset: 5px;
 }
@@ -50,10 +46,8 @@ button:focus-visible, a:focus-visible, .upload:focus-within {
   display: none !important;
 }
 
-/* Header and navigation */
-
 header {
-  max-width: 1440px;
+  width: 100%;
   margin: auto;
   padding: 28px 5%;
   display: flex;
@@ -74,18 +68,6 @@ header {
   letter-spacing: -.6px;
 }
 
-.brand-icon {
-  font-size: 36px;
-}
-
-.tag {
-  font-size: 9px;
-  letter-spacing: 1.3px;
-  margin-left: 12px;
-  border-left: 1px solid #bac2b2;
-  padding-left: 18px;
-}
-
 .quiet {
   border: 0;
   background: transparent;
@@ -99,8 +81,6 @@ header {
   margin-left: 12px;
 }
 
-/* Abort sits in the quiz header and must stay noticeable without
-   competing with the answer buttons: outlined, flat and green-toned. */
 .quiet#abort {
   border: 1px solid #cdd5c1;
   border-radius: 7px;
@@ -114,13 +94,11 @@ header {
   color: var(--ink);
 }
 
-/* Page layout and typography */
-
 main {
   max-width: 1180px;
   margin: auto;
   padding: 48px 32px 65px;
-  min-height: calc(100vh - 166px);
+  min-height: auto;
 }
 
 .hero {
@@ -178,67 +156,30 @@ h3 {
   max-width: 680px;
 }
 
-/* Legacy three-column rules layout */
-
-.rules {
-  display: flex;
-  justify-content: center;
-  margin: 34px auto;
-  gap: 0;
-}
-
-.rules>div {
-  min-width: 170px;
-  padding: 0 26px;
-  border-right: 1px solid #d5dacb;
-}
-
-.rules>div:last-child {
-  border: 0;
-}
-
-.rules strong {
-  display: block;
-  font-size: 23px;
-  letter-spacing: -.7px;
-}
-
-.rules span {
-  display: block;
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 9px;
-}
-
-/* Buttons and supporting text */
-
 .primary {
   background: var(--green);
   color: var(--ink);
-  border: 1px solid var(--ink);
+  border: 1px solid var(--green-deep);
   border-radius: 9px;
   padding: 20px 28px;
   min-width: 255px;
   font-weight: 700;
   font-size: 16px;
-  box-shadow: 0 3px 0 var(--ink);
-  /* Same press feedback as the answer buttons. The margin compensates
-     for the shadow so the button keeps its original footprint. */
-  margin-bottom: 3px;
+  box-shadow: 0 4px 0 var(--green-deep);
+  margin-bottom: 4px;
   transform: translateY(0);
-  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+  transition: transform .07s ease-out, box-shadow .07s ease-out;
 }
 
 .primary:hover:not(:disabled) {
   background: #b5e659;
 }
 
-/* The .pressing class mirrors :active because touch browsers can cancel the
-   :active state mid-gesture, which made the button only react on release. */
 .primary:active:not(:disabled),
 .primary.pressing:not(:disabled) {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 var(--ink);
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--green-deep);
+  transition: none;
 }
 
 .primary span {
@@ -268,8 +209,6 @@ h3 {
   margin-top: 44px;
 }
 
-/* Footer */
-
 footer {
   border-top: 1px solid #dce0d2;
   display: flex;
@@ -279,59 +218,6 @@ footer {
   font-size: 9px;
   letter-spacing: 1px;
   color: var(--muted);
-}
-
-/* Admin: uploads and picture gallery */
-
-.upload-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin: 30px 0 18px;
-}
-
-.upload {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-  border: 1px dashed #9ba88f;
-  border-radius: 16px;
-  padding: 28px;
-  background: #eeefdf;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.upload-icon {
-  font-size: 32px;
-}
-
-.upload strong {
-  font-size: 21px;
-}
-
-.upload>span:not(.upload-icon) {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.upload .file-button {
-  background: white;
-  border: 1px solid #c7cebd;
-  padding: 10px 17px;
-  border-radius: 7px;
-  color: var(--ink) !important;
-}
-
-.upload input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-  width: 100%;
-  height: 100%;
 }
 
 .notice {
@@ -383,8 +269,6 @@ footer {
   color: #782f2f;
 }
 
-/* Quiz: progress, pictures, and answers */
-
 .game {
   max-width: 960px;
   margin: auto;
@@ -394,6 +278,11 @@ footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
+}
+
+.game-top > * {
+  flex: 0 0 auto;
 }
 
 .score-pill {
@@ -423,8 +312,6 @@ footer {
   border-radius: 5px;
 }
 
-/* The green fill is a scaled layer rather than a flat background colour,
-   so each segment can slide in from the left and retract to the right. */
 .progress span::after {
   content: "";
   position: absolute;
@@ -440,111 +327,200 @@ footer {
   transform: scaleX(1);
 }
 
-.progress .active {
-  background: #82956c;
+.pill-divider {
+  display: inline-block;
+  width: 1px;
+  height: 11px;
+  margin: 0 10px;
+  vertical-align: -1px;
+  background: #cdd5c1;
 }
 
-.progress .wrong {
-  background: #ca8872;
+.timer {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  border-radius: 5px;
+  padding: 3px 7px;
+  margin: -3px -7px;
+  transition: color .2s ease;
 }
 
-.picture-stage {
-  background: #e8eadf;
+.timer.urgent {
+  color: #c0392b;
+}
+
+.game-question {
+  font-size: 20px;
+  letter-spacing: -.4px;
+  text-align: center;
+  margin: 0 0 20px;
+}
+
+.group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+/* The card itself is only the perspective container. Its frame, fill and
+   border live on each face, so the whole card turns as one piece instead of
+   the artwork rotating inside a static frame. */
+.group-card {
+  perspective: 1100px;
+}
+
+.card-inner {
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform .6s cubic-bezier(.4, .2, .2, 1);
+}
+
+/* Used for one frame while the revealed reverse is promoted to the front,
+   so the reset to rotateY(0) happens instantly instead of animating back. */
+.card-inner.no-flip {
+  transition: none;
+}
+
+.group-card.flipped .card-inner {
+  transform: rotateY(-180deg);
+}
+
+.card-face {
   border: 1px solid #d9dece;
-  border-radius: 15px;
+  border-radius: 14px;
+  background: #eef0e3;
   overflow: hidden;
-  height: clamp(240px, 46vh, 560px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transition: border-color .2s ease, background-color .2s ease;
 }
 
-.picture-stage img {
+.group-card.right .card-face {
+  border-color: #8ac440;
+  background: #eef5e0;
+}
+
+.group-card.wrong .card-face {
+  border-color: #ca8872;
+  background: #f7ebe0;
+}
+
+/* The reverse carries the next group's picture and buttons, so it mirrors
+   the front exactly and only differs by being rotated away. */
+.card-front,
+.card-back {
+  display: block;
+}
+
+.card-back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(-180deg);
+  box-sizing: border-box;
+}
+
+.group-frame {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: #e8eadf;
+  overflow: hidden;
+}
+
+.group-frame img {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
+  display: block;
 }
 
-.question {
+.verdict {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 12px;
+}
+
+.verdict-button {
+  --face: #f6cfcf;
+  --edge: #c98a8a;
+  background: var(--face);
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  color: #0a140d;
+  padding: 14px 12px;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0;
+  box-shadow: 0 4px 0 var(--edge);
+  margin-bottom: 4px;
+  transform: translateY(0);
+  transition: transform .07s ease-out, box-shadow .07s ease-out, background-color .07s ease-out;
+}
+
+.verdict-button.real {
+  --face: #ccdcf2;
+  --edge: #8aa8ce;
+}
+
+.verdict-button.ai:hover:not(:disabled):not(.selected):not(.missed) {
+  background-color: #f0bdbd;
+}
+
+.verdict-button.real:hover:not(:disabled):not(.selected):not(.missed) {
+  background-color: #b8cdec;
+}
+
+.verdict-button:active:not(:disabled),
+.verdict-button.pressing:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--edge);
+  transition: none;
+}
+
+.verdict-button.selected,
+.verdict-button.answer {
+  --face: var(--green);
+  --edge: var(--green-deep);
+}
+
+.verdict-button:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.verdict-button.missed {
+  opacity: .45;
+}
+
+.verdict-button.missed.ai {
+  --face: #f6cfcf;
+  --edge: #c98a8a;
+}
+
+.verdict-button.missed.real {
+  --face: #ccdcf2;
+  --edge: #8aa8ce;
+}
+
+.actions {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 25px;
+  justify-content: center;
   margin-top: 20px;
 }
 
-.question h2 {
-  font-size: 28px;
-  margin: 6px 0;
-}
-
-.question p {
-  margin: 8px 0;
-}
-
-.answers {
-  display: flex;
-  gap: 12px;
-}
-
-.answer {
-  border: 1px solid var(--ink);
-  border-radius: 9px;
-  padding: 16px 28px;
-  min-width: 140px;
-  font-weight: 800;
-  font-size: 23px;
-  /* Physical depth: a solid black edge under the button, matching the
-     stacked look already used by .primary. The margin compensates for
-     the shadow so the row height stays unchanged. */
-  box-shadow: 0 4px 0 var(--ink);
-  margin-bottom: 4px;
-  transform: translateY(0);
-  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
-}
-
-/* Pressing sinks the button into its own shadow, narrowing the visible
-   edge and reading as a physical press. .pressing mirrors :active for
-   touch devices where the pseudo-class is unreliable. */
-.answer:active:not(:disabled),
-.answer.pressing:not(:disabled) {
-  transform: translateY(3px);
-  box-shadow: 0 1px 0 var(--ink);
-}
-
-.answer span {
-  display: block;
-  font-size: 11px;
-  font-weight: 400;
-  margin-top: 5px;
-}
-
-/* AI (pale red) and Real (pale blue) are matched in lightness and
-   saturation, so neither button may hint at the correct answer. */
-.yes {
-  background: #f6cfcf;
-  color: #0a140d;
-}
-
-.yes:hover:not(:disabled) {
-  background: #f0bdbd;
-}
-
-.no {
-  background: #ccdcf2;
-  color: #0a140d;
-}
-
-.no:hover:not(:disabled) {
-  background: #b8cdec;
+#judge {
+  min-width: 255px;
+  max-width: 100%;
 }
 
 .feedback {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 15px;
-  margin-top: 19px;
+  margin-top: 16px;
   padding: 15px 20px;
   border-radius: 10px;
   background: #e6edda;
@@ -553,64 +529,19 @@ footer {
 .feedback p {
   margin: 0;
   line-height: 1.5;
+  flex: 1 1 220px;
+  min-width: 0;
+  text-align: center;
 }
 
 .feedback.wrong {
   background: #f1e3d8;
 }
 
-/* Results screen */
-
-.result-badge {
-  display: inline-block;
-  margin-top: 30px;
-  padding: 9px 18px;
-  border-radius: 30px;
-  background: var(--green);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 2px;
-}
-
-.result-badge.fail {
-  background: #ecd7c9;
-}
-
-/* Centre the result content vertically: masthead 166px is the shared
-   header/footer allowance used by main, plus its 48px top and 65px
-   bottom padding. The inherited .hero top padding is cancelled so the
-   block sits optically centred. */
-#result {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: calc(100vh - 166px - 113px);
-  padding-top: 0;
-}
-
 #result h1 {
   font-size: 64px;
   letter-spacing: -3px;
   margin-top: 22px;
-}
-
-.final-score {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 12px;
-  margin: 25px 0;
-}
-
-.final-score strong {
-  font-size: 86px;
-  letter-spacing: -5px;
-}
-
-.final-score span {
-  color: var(--muted);
-  font-size: 20px;
 }
 
 .result-rounds {
@@ -620,39 +551,13 @@ footer {
   margin-bottom: 35px;
 }
 
-.round-result {
-  border-radius: 8px;
-  background: #dfebcd;
-  padding: 12px;
-  font-size: 12px;
-}
-
-.round-result.wrong {
-  background: #ecdcd0;
-}
-
-.back-home {
-  display: block;
-  margin: 18px auto 0;
-}
-
-/* Small-screen layout */
-
 @media (max-width: 650px) {
   header {
     padding: 18px 20px;
   }
 
-  .tag {
-    display: none;
-  }
-
   .brand {
     font-size: 14px;
-  }
-
-  .brand-icon {
-    font-size: 28px;
   }
 
   main {
@@ -663,55 +568,53 @@ footer {
     letter-spacing: -3px;
   }
 
-  .rules>div {
-    min-width: 0;
-    padding: 0 16px;
+  .game-top {
+    flex-wrap: wrap;
+    gap: 10px;
   }
 
-  .rules strong {
-    font-size: 20px;
+  .game-top .eyebrow {
+    flex: 1 1 auto;
   }
 
-  .rules span {
-    font-size: 11px;
+  .group {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
   }
 
-  .upload-grid {
+  .verdict {
     grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 8px;
   }
 
-  .question {
-    flex-direction: column;
-    text-align: center;
-    gap: 12px;
+  .verdict-button {
+    padding: 12px 10px;
+    font-size: 14px;
+    box-shadow: 0 3px 0 var(--edge);
+    margin-bottom: 3px;
   }
 
-  .answers {
-    width: 100%;
-  }
-
-  .answer {
-    flex: 1;
-    padding: 15px;
-    min-width: 0;
+  .group-frame {
+    aspect-ratio: 1;
   }
 
   .feedback {
     flex-direction: column;
     text-align: center;
+    margin-top: 10px;
+    padding: 9px 12px;
+    gap: 8px;
   }
 
-  .picture-stage {
-    height: 39vh;
+  .feedback p {
+    flex: 0 1 auto;
+    font-size: 13px;
+    line-height: 1.4;
   }
 
   .result-rounds {
     gap: 5px;
-  }
-
-  .round-result {
-    padding: 9px 6px;
-    font-size: 11px;
   }
 
   footer {
@@ -725,8 +628,6 @@ footer {
   }
 
 }
-
-/* Welcome: game instructions */
 
 .game-rules {
   max-width: 620px;
@@ -745,8 +646,6 @@ footer {
   gap: 20px;
   min-width: 0;
 }
-
-/* Logo and product branding */
 
 .crossover-logo {
   display: block;
@@ -785,8 +684,6 @@ footer {
   margin: 38px 0 26px;
 }
 
-/* Compact header */
-
 @media (max-width: 800px) {
   header {
     flex-wrap: wrap;
@@ -810,8 +707,6 @@ footer {
   }
 
 }
-
-/* Phone header */
 
 @media (max-width: 450px) {
   .crossover-logo {
@@ -838,11 +733,43 @@ footer {
     font-size: 5.5vw;
   }
 
+  .score-pill {
+    padding: 8px 12px;
+    letter-spacing: .5px;
+  }
+
+  .score-pill strong {
+    font-size: 15px;
+    margin-left: 6px;
+  }
+
+  .pill-divider {
+    margin: 0 7px;
+  }
+
+  .game-top #abort {
+    margin-left: auto;
+  }
+
+  .group {
+    gap: 8px;
+  }
+
+  .verdict-button {
+    padding: 11px 8px;
+    font-size: 13px;
+  }
+
 }
 
-/* Result screen: 3D ribbon celebration.
-   The stage owns the perspective so each piece flips in real 3D space
-   rather than rotating as a flat rectangle. */
+.tile-file {
+  color: var(--muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 45%;
+}
 
 .ribbon-stage {
   position: fixed;
@@ -872,3 +799,4 @@ footer {
     transform: translate3d(var(--drift), 118vh, 0) rotateX(var(--tumble)) rotateY(var(--spin)) rotateZ(var(--spin));
   }
 }
+

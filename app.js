@@ -1,145 +1,277 @@
 'use strict';
 const $ = id => document.getElementById(id);
-let pictures = [], db = null, game = null, round = 0, importing = false;
-let questionURL = null;
-const galleryURLs = [];
-// admin.html sets this flag before loading app.js, so the same script boots
-// straight into the library there while index.html always opens on welcome.
+const ROUND_SECONDS = 60;
+const REVEAL_MS = 1000;
+const MANIFEST = 'pictures.json';
+let pictures = [], game = null, choices = [], currentGroup = [],
+    roundTimer = null, revealTimer = null;
+
 const startScreen = window.PICTIONARAI_START === 'library' ? 'library' : 'home';
+
 function show(id) {
   for (const section of document.querySelectorAll('.screen')) section.hidden = section.id !== id;
-  // Ribbons belong to the result screen only: leaving it must clear any that
-  // are still falling, otherwise they linger over the next screen.
   if (id !== 'result') for (const stage of document.querySelectorAll('.ribbon-stage')) stage.remove();
-  // The header button is a way back out of the library only: it never shows
-  // on the welcome, quiz or result screens, so participants cannot find it.
-  // index.html has no library, and therefore no button either.
   const back = $('manage');
   if (back) back.hidden = id !== 'library';
   window.scrollTo(0, 0);
 }
-// index.html carries no library markup, so every element below is optional
-// and must be guarded: the same script serves both pages.
+
 function storageMessage(text) { const note = $('storage-note'); if (note) note.textContent = text; }
-function openDatabase() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('picture-this-event', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('pictures', { keyPath: 'id' });
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-    request.onblocked = () => reject(new Error('Storage is blocked by another window.'));
-  });
+
+/** Loads the picture manifest and turns it into { route, isAI } entries.
+ *  A missing or malformed manifest leaves the library empty rather than
+ *  starting a round with pictures the page cannot display. */
+async function loadPictures() {
+  let manifest;
+  try {
+    const response = await fetch(MANIFEST, { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    manifest = await response.json();
+  } catch {
+    storageMessage(`Could not read ${MANIFEST}. Check that the file sits next to index.html and holds a { "path": true|false } map.`);
+    return [];
+  }
+  const entries = Object.entries(manifest).filter(([route, isAI]) => typeof route === 'string' && typeof isAI === 'boolean');
+  return entries.map(([route, isAI]) => ({ id: route, route, isAI }));
 }
-function databaseAction(mode, action) {
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction('pictures', mode);
-    const request = action(tx.objectStore('pictures'));
-    tx.oncomplete = () => resolve(request.result);
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
-  });
+
+/** Warms the browser cache for the pictures the participant is about to see,
+ *  so the next group is already decoded by the time the cards flip. The
+ *  current group is never passed in: it is on screen and would be decoded
+ *  twice. Nothing is awaited, so a slow picture cannot delay the round. */
+function warmUpcoming(upcoming) {
+  for (const picture of upcoming) {
+    if (!picture) continue;
+    const img = new Image();
+    img.src = picture.route;
+  }
 }
-function refresh() {
-  // index.html carries the welcome markup, admin.html carries the library.
-  // Each page only has the half it needs, so both are guarded.
+
+/** Decodes a group up front and resolves once every picture has settled,
+ *  whether it loaded or not. Used to gate the start button, because a round
+ *  that begins before the first group is readable shows empty cards. */
+function decodeGroup(group) {
+  return Promise.all(group.map(picture => new Promise(resolve => {
+    const img = new Image();
+    img.onload = img.onerror = () => resolve();
+    img.src = picture.route;
+  })));
+}
+
+/** Builds the round the start button will hand over and decodes its first
+ *  group, then unlocks the button. The round is kept in `game`, so pressing
+ *  start opens exactly the group that was decoded instead of reshuffling into
+ *  a different one. */
+async function armStart() {
   const startButton = $('start'), ready = $('ready');
-  if (startButton) startButton.disabled = importing || pictures.length < Quiz.MIN_PICTURES;
+  if (!startButton) return;
+  if (pictures.length < Quiz.MIN_PICTURES) return;
+  startButton.disabled = true;
+  if (ready) { ready.hidden = false; ready.textContent = 'Loading the first pictures…'; }
+  game = Quiz.create(pictures);
+  const first = Quiz.next(game);
+  await decodeGroup(first);
+  if (!game) return;
+  startButton.disabled = false;
+  if (ready) { ready.hidden = true; ready.textContent = ''; }
+}
+
+function refresh() {
+  const startButton = $('start'), ready = $('ready');
+  if (startButton) startButton.disabled = pictures.length < Quiz.MIN_PICTURES;
   if (ready) {
     ready.hidden = pictures.length >= Quiz.MIN_PICTURES;
-    ready.textContent = pictures.length >= Quiz.MIN_PICTURES ? '' : `Organizer: open Admin and add ${Quiz.MIN_PICTURES - pictures.length} more picture${Quiz.MIN_PICTURES - pictures.length === 1 ? '' : 's'} to begin.`;
+    ready.textContent = pictures.length >= Quiz.MIN_PICTURES ? '' : `Organizer: add ${Quiz.MIN_PICTURES - pictures.length} more picture${Quiz.MIN_PICTURES - pictures.length === 1 ? '' : 's'} to ${MANIFEST} to begin.`;
   }
   const count = $('library-count'), gallery = $('gallery');
   if (!count || !gallery) return;
   const ai = pictures.filter(p => p.isAI).length;
   count.textContent = `${pictures.length} pictures · ${ai} AI · ${pictures.length - ai} real`;
-  galleryURLs.forEach(url => URL.revokeObjectURL(url)); galleryURLs.length = 0;
   gallery.replaceChildren();
   for (const picture of pictures) {
     const tile = document.createElement('div'); tile.className = 'tile';
-    const img = document.createElement('img'); img.src = URL.createObjectURL(picture.blob); galleryURLs.push(img.src); img.alt = picture.isAI ? 'AI-generated library picture' : 'Real library photograph'; img.loading = 'lazy';
+    const img = document.createElement('img');
+    img.src = picture.route;
+    img.alt = picture.isAI ? 'AI-generated library picture' : 'Real library photograph';
+    img.loading = 'lazy';
     const bottom = document.createElement('div'); bottom.className = 'tile-bottom';
     const label = document.createElement('span'); label.textContent = picture.isAI ? '✳ AI-generated' : '◎ Real photo';
-    const remove = document.createElement('button'); remove.textContent = 'Remove'; remove.disabled = importing;
-    remove.onclick = async () => {
-      if (!confirm('Remove this picture from the event library?')) return;
-      try { if (db) await databaseAction('readwrite', store => picture.id.startsWith('bundled-') ? store.put({ id: picture.id, removed: true }) : store.delete(picture.id)); pictures = pictures.filter(p => p.id !== picture.id); refresh(); }
-      catch { storageMessage('Could not remove this picture. Please try again.'); }
-    };
-    bottom.append(label, remove); tile.append(img, bottom); gallery.append(tile);
+    const file = document.createElement('span'); file.className = 'tile-file';
+    file.textContent = picture.route.split('/').pop();
+    bottom.append(label, file); tile.append(img, bottom); gallery.append(tile);
   }
 }
-async function validImage(file) {
-  const url = URL.createObjectURL(file);
-  try { const img = new Image(); img.src = url; await img.decode(); return img.naturalWidth > 0; }
-  catch { return false; }
-  finally { URL.revokeObjectURL(url); }
-}
-async function importPictures(files, isAI) {
-  if (importing) return;
-  // The file inputs live on admin.html; on index.html there is nothing to lock.
-  const inputs = [$('ai-files'), $('real-files')].filter(Boolean);
-  importing = true; inputs.forEach(input => input.disabled = true); refresh();
-  let added = 0, skipped = 0, failed = 0;
-  for (const file of files) {
-    storageMessage(`Importing picture ${added + skipped + failed + 1} of ${files.length}…`);
-    if (!/^image\/(jpeg|png|webp|gif|avif)$/.test(file.type) || !await validImage(file)) { skipped++; continue; }
-    const picture = { id: crypto.randomUUID(), isAI, blob: file };
-    try { if (db) await databaseAction('readwrite', store => store.add(picture)); pictures.push(picture); added++; }
-    catch { failed++; }
-  }
-  importing = false; inputs.forEach(input => { input.disabled = false; input.value = ''; }); refresh();
-  storageMessage(`${added} picture${added === 1 ? '' : 's'} added.${skipped ? ` ${skipped} unsupported or unreadable file(s) skipped.` : ''}${failed ? ` ${failed} could not be saved; browser storage may be full.` : ''} ${db ? 'Stored locally in this browser. Keep the same browser profile and app location for the event; retain your original image files as a backup.' : 'Temporary session only: browser storage is unavailable. Keep this tab open; reload will clear the library.'}`);
-}
+
 function start() {
-  if (importing || pictures.length < Quiz.MIN_PICTURES) return;
-  game = Quiz.create(pictures); round = 0; show('game'); renderRound();
+  if (pictures.length < Quiz.MIN_PICTURES) return;
+  if (!game) return;
+  choices = []; revealTimer = null;
+  const first = game.pending;
+  warmUpcoming(game.remaining.slice(-Quiz.GROUP_SIZE));
+  show('game');
+  renderGroup(first, 0);
+  startTimer(ROUND_SECONDS);
 }
-function renderStreak() {
-  $('score').textContent = game.streak;
-  $('progress').setAttribute('aria-label', `${game.streak} of ${Quiz.TARGET} consecutive correct answers`);
-  // Segments are created once and only re-classed afterwards: rebuilding
-  // them would skip the CSS transition and jump straight to the final state.
-  while ($('progress').childElementCount < Quiz.TARGET) $('progress').append(document.createElement('span'));
-  const items = [...$('progress').children];
-  items.forEach((item, index) => {
-    // The left transform-origin makes the fill grow rightwards when a
-    // segment turns green and retract leftwards when the streak resets.
-    item.classList.toggle('correct', index < game.streak);
+
+function startTimer(seconds) {
+  stopTimer();
+  let left = seconds;
+  const render = () => {
+    const timer = $('timer');
+    timer.textContent = left;
+    timer.classList.toggle('urgent', left <= 5);
+  };
+  render();
+  roundTimer = setInterval(() => {
+    left--;
+    if (left <= 0) { stopTimer(); finish(false); return; }
+    render();
+  }, 1000);
+}
+
+function stopTimer() { clearInterval(roundTimer); roundTimer = null; }
+
+/** Builds one side of a card: its picture plus the AI / Real buttons. */
+function buildFace(picture, index, side) {
+  const face = document.createElement('div'); face.className = `card-face card-${side}`;
+  const frame = document.createElement('div'); frame.className = 'group-frame';
+  const img = document.createElement('img');
+  img.src = picture.route;
+  img.alt = 'Challenge picture — decide whether it was generated by AI';
+  const pick = document.createElement('div'); pick.className = 'verdict';
+  const ai = document.createElement('button'); ai.type = 'button'; ai.className = 'verdict-button ai'; ai.textContent = 'AI';
+  const real = document.createElement('button'); real.type = 'button'; real.className = 'verdict-button real'; real.textContent = 'Real';
+  ai.onpointerdown = () => choose(index, true);
+  real.onpointerdown = () => choose(index, false);
+  ai.onclick = event => { if (event.detail === 0) choose(index, true); };
+  real.onclick = event => { if (event.detail === 0) choose(index, false); };
+  pick.append(ai, real);
+  frame.append(img);
+  face.append(frame, pick);
+  return face;
+}
+
+function renderGroup(group, groupIndex) {
+  currentGroup = group;
+  choices = new Array(group.length).fill(null);
+  $('round').textContent = `GROUP ${String(groupIndex + 1).padStart(2, '0')}`;
+  renderStreak();
+  const container = $('group');
+  container.replaceChildren();
+  group.forEach((picture, index) => {
+    const card = document.createElement('div'); card.className = 'group-card';
+    const inner = document.createElement('div'); inner.className = 'card-inner';
+    inner.append(buildFace(picture, index, 'front'));
+    card.append(inner);
+    container.append(card);
   });
+  $('feedback').hidden = true;
+  $('feedback').className = 'feedback';
+  $('judge').disabled = true;
+  updateJudge();
 }
-function renderRound() {
-  $('round').textContent = `PICTURE ${String(round + 1).padStart(2, '0')}`;
+
+/** Reveals the next group on the reverse of each card, then swaps it to the
+ *  front so the round can continue without a visible reset. */
+function flipToGroup(cards, group, groupIndex) {
+  cards.forEach((card, index) => {
+    const back = buildFace(group[index], index, 'back');
+    back.querySelectorAll('.verdict-button').forEach(button => { button.disabled = true; });
+    card.querySelector('.card-inner').append(back);
+    card.classList.add('flipped');
+  });
+  setTimeout(() => {
+    cards.forEach(card => {
+      const inner = card.querySelector('.card-inner');
+      // The reverse is promoted in place instead of being rebuilt, so the
+      // picture is never decoded twice and no object URL leaks. The reset
+      // must not animate: un-rotating with the transition still active would
+      // play a second flip as the card springs back to zero.
+      inner.classList.add('no-flip');
+      const shown = inner.querySelector('.card-back');
+      shown.className = 'card-face card-front';
+      inner.replaceChildren(shown);
+      shown.querySelectorAll('.verdict-button').forEach(button => { button.disabled = false; });
+      card.classList.remove('flipped', 'right', 'wrong');
+      void inner.offsetWidth;
+      inner.classList.remove('no-flip');
+    });
+    currentGroup = group;
+    choices = new Array(group.length).fill(null);
+    $('round').textContent = `GROUP ${String(groupIndex + 1).padStart(2, '0')}`;
+    $('judge').disabled = true;
+    updateJudge();
+    warmUpcoming(game ? game.remaining.slice(-Quiz.GROUP_SIZE) : []);
+  }, 620);
+}
+
+function choose(index, isAI) {
+  if (revealTimer || !currentGroup.length) return;
+  choices[index] = isAI;
+  const card = $('group').children[index];
+  const picked = card.querySelector(isAI ? '.verdict-button.ai' : '.verdict-button.real');
+  const other = card.querySelector(isAI ? '.verdict-button.real' : '.verdict-button.ai');
+  picked.classList.add('selected');
+  other.classList.remove('selected');
+  updateJudge();
+}
+
+function updateJudge() {
+  const ready = choices.length === currentGroup.length && choices.every(choice => choice !== null);
+  $('judge').disabled = !ready;
+}
+
+function judge() {
+  if (revealTimer || !game) return;
+  const result = Quiz.answer(game, currentGroup, choices);
+  if (!result) return;
   renderStreak();
-  $('yes').disabled = $('no').disabled = true;
-  $('feedback').hidden = true; $('answer-hint').textContent = 'Loading picture…';
-  if (questionURL) URL.revokeObjectURL(questionURL);
-  questionURL = URL.createObjectURL(game.pictures[round].blob);
-  $('question-image').onload = () => { $('yes').disabled = $('no').disabled = false; $('answer-hint').textContent = 'Look closely. Trust your instinct.'; };
-  $('question-image').onerror = () => { $('answer-hint').textContent = 'Picture could not load. Return to welcome and check the library.'; };
-  $('question-image').src = questionURL;
+  const best = game.results.length === 1 ? 'Best possible score.' : 'Keep it up.';
+  $('feedback').className = result.solved ? 'feedback' : 'feedback wrong';
+  $('feedback-text').textContent = `${result.correct} of ${Quiz.GROUP_SIZE} correct. ${result.solved ? (Quiz.passed(game) ? 'Two clean groups! You passed!' : `${best} One more clean group to pass.`) : 'A single mistake resets your streak.'}`;
+  $('feedback').hidden = false;
+  $('judge').disabled = true;
+  const cards = [...$('group').children];
+  cards.forEach((card, index) => {
+    const truth = currentGroup[index].isAI;
+    const right = truth === choices[index];
+    card.classList.add(right ? 'right' : 'wrong');
+    const truthButton = card.querySelector(truth ? '.verdict-button.ai' : '.verdict-button.real');
+    const buttons = [...card.querySelectorAll('.verdict-button')];
+    truthButton.classList.add('answer');
+    if (!right) buttons.find(button => button !== truthButton).classList.add('missed');
+    buttons.forEach(button => { button.disabled = true; });
+  });
+  warmUpcoming(game.remaining.slice(-Quiz.GROUP_SIZE));
+  revealTimer = setTimeout(() => {
+    revealTimer = null;
+    if (Quiz.passed(game)) { finish(true); return; }
+    const next = Quiz.next(game);
+    flipToGroup(cards, next, game.results.length);
+  }, REVEAL_MS);
 }
-function submit(choice) {
-  if ($('yes').disabled || !game) return;
-  const correct = Quiz.answer(game, round, choice);
-  if (correct === null) return;
-  $('yes').disabled = $('no').disabled = true;
-  renderStreak();
-  $('feedback').className = correct ? 'feedback' : 'feedback wrong';
-  $('feedback-text').textContent = `${correct ? (Quiz.passed(game) ? 'Two correct in a row! You passed!' : 'Correct! One more in a row to pass.') : 'Not quite. Your streak resets to zero. Keep trying!'} This picture is ${game.pictures[round].isAI ? 'AI-generated.' : 'a real photograph.'}`;
-  $('feedback').hidden = false; $('answer-hint').textContent = 'Answer locked in.';
-  $('next').textContent = Quiz.passed(game) ? 'See my result →' : 'Next picture →'; $('next').focus();
+
+function renderStreak() {
+  const score = $('score'), progress = $('progress');
+  if (!score || !progress) return;
+  score.textContent = game.streak;
+  progress.setAttribute('aria-label', `${game.streak} of ${Quiz.GROUPS_TO_PASS} consecutive correct groups`);
+  while (progress.childElementCount < Quiz.GROUPS_TO_PASS) progress.append(document.createElement('span'));
+  [...progress.children].forEach((item, index) => item.classList.toggle('correct', index < game.streak));
 }
-function finish() {
-  if (!Quiz.passed(game)) return;
-  $('result-title').textContent = 'Congratulations!';
-  $('result-description').textContent = 'You got two pictures right in a row. Challenge passed!';
-  $('result-rounds').textContent = `${game.answers.length} pictures answered`;
+
+function finish(passed) {
+  stopTimer();
+  clearTimeout(revealTimer); revealTimer = null;
+  $('result-title').textContent = passed ? 'Congratulations!' : 'Time is up';
+  $('result-description').textContent = passed
+    ? `You judged ${Quiz.GROUPS_TO_PASS} groups in a row without a mistake. Challenge passed!`
+    : 'The clock ran out before you cleared two groups. Try again!';
+  $('result-rounds').textContent = `${game.results.length} group${game.results.length === 1 ? '' : 's'} played · ${game.results.filter(r => r.solved).length} correct`;
   show('result');
-  celebrate();
+  if (passed) celebrate();
 }
-// Real 3D ribbons: each piece is a DOM element animated with rotateX/rotateY
-// inside a perspective container, so it flips through space instead of
-// spinning as a flat rectangle. Pieces remove themselves when they land.
+
 function celebrate() {
   const colors = ['#e5433f', '#f2a93b', '#f2e14c', '#5fb85f', '#3f8ee5'];
   for (const leftover of document.querySelectorAll('.ribbon-stage')) leftover.remove();
@@ -152,12 +284,11 @@ function celebrate() {
     piece.className = 'ribbon';
     const width = 8 + Math.random() * 10;
     const height = width * (1.6 + Math.random() * 1.4);
-    const duration = 2.6 + Math.random() * 2.2;
     piece.style.cssText =
       `left:${Math.random() * 100}%;` +
       `width:${width}px;height:${height}px;` +
       `background:${colors[index % colors.length]};` +
-      `animation-duration:${duration}s;` +
+      `animation-duration:${2.6 + Math.random() * 2.2}s;` +
       `animation-delay:${Math.random() * .9}s;` +
       `--drift:${(Math.random() * 2 - 1) * 240}px;` +
       `--spin:${(Math.random() * 2 - 1) * 1080}deg;` +
@@ -166,9 +297,7 @@ function celebrate() {
   }
   setTimeout(() => stage.remove(), 6500);
 }
-// Touch browsers can drop the :active state during a press, so the sunken
-// look is driven by pointer events instead. pointercancel and pointerleave
-// release the button if the finger slides away or the gesture is taken over.
+
 const pressable = 'button:not(:disabled)';
 document.addEventListener('pointerdown', event => {
   const button = event.target.closest(pressable);
@@ -180,57 +309,48 @@ for (const release of ['pointerup', 'pointercancel', 'pointerleave']) {
     if (button) button.classList.remove('pressing');
   });
 }
-const aiInput = $('ai-files'), realInput = $('real-files');
-if (aiInput) aiInput.onchange = event => importPictures([...event.target.files], true);
-if (realInput) realInput.onchange = event => importPictures([...event.target.files], false);
-// The header button exists on admin.html only, where it leaves the page
-// entirely so the URL never keeps /admin.html in the address bar. './'
-// resolves to the site root rather than an explicit index.html.
+
 const backButton = $('manage');
 if (backButton) backButton.onclick = () => { location.href = './'; };
 $('home-link').onclick = event => {
   event.preventDefault();
   if (startScreen === 'library') { location.href = './'; return; }
   const quiz = $('game');
-  if (quiz && !quiz.hidden && !confirm('End this game and return to the welcome screen?')) return;
+  if (quiz && !quiz.hidden && !confirm('End this round and return to the welcome screen? Your progress will be lost.')) return;
+  stopTimer(); clearTimeout(revealTimer); revealTimer = null;
+  game = null; currentGroup = []; choices = [];
   show('home');
+  $('start').disabled = true;
+  armStart();
 };
-// Switch screens before the database work starts: opening IndexedDB and
-// decoding the bundled photographs takes long enough to be visible, so the
-// library must not wait for it. refresh() fills the grid in when it resolves.
-if (startScreen === 'library') show('library');
-// Everything below belongs to the quiz, which lives on index.html only.
-// bind() skips any element the current page does not contain.
+
 function bind(id, handler) { const element = $(id); if (element) element.onclick = handler; }
 bind('start', start);
+bind('judge', judge);
 bind('abort', () => {
-  game = null;
-  round = 0;
-  $('question-image').onload = $('question-image').onerror = null;
-  $('question-image').removeAttribute('src');
-  if (questionURL) { URL.revokeObjectURL(questionURL); questionURL = null; }
-  $('yes').disabled = $('no').disabled = true;
-  $('feedback').hidden = true;
+  stopTimer(); clearTimeout(revealTimer); revealTimer = null;
+  game = null; currentGroup = []; choices = [];
   show('home');
+  $('start').disabled = true;
   $('start').focus();
+  armStart();
 });
-bind('back-home', () => show('home'));
-bind('yes', () => submit(true)); bind('no', () => submit(false));
-bind('next', () => { if (game.answers.length !== round + 1) return; if (Quiz.passed(game)) finish(); else { round = Quiz.next(game); renderRound(); } });
+bind('back-home', () => {
+  game = null; currentGroup = []; choices = [];
+  show('home');
+  $('start').disabled = true;
+  armStart();
+});
+
+if (startScreen === 'library') show('library');
+
 (async () => {
-  try { db = await openDatabase(); pictures = await databaseAction('readonly', store => store.getAll()); storageMessage('Pictures are stored locally in this browser. Keep the same browser profile and app location, and retain your original files as a backup.'); }
-  catch { db = null; storageMessage('Browser storage is unavailable. Pictures will work for this session only. Keep this tab open during the event.'); }
-  const existing = new Set(pictures.map(p => p.id));
-  pictures = pictures.filter(p => !p.removed);
-  for (const entry of window.BUNDLED_PICTURES || []) {
-    if (existing.has(entry.id)) continue;
-    const bytes = Uint8Array.from(atob(entry.base64), character => character.charCodeAt(0));
-    const picture = { id: entry.id, isAI: entry.isAI, blob: new Blob([bytes], { type: 'image/jpeg' }) };
-    pictures.push(picture);
-    if (db) {
-      try { await databaseAction('readwrite', store => store.put(picture)); }
-      catch { storageMessage('Bundled photographs are ready for this session, but could not be saved to browser storage. They will load again when you reopen the app.'); }
-    }
-  }
+  pictures = await loadPictures();
   refresh();
+  if (startScreen === 'library') {
+    if (pictures.length) storageMessage(`${pictures.length} pictures listed in ${MANIFEST}.`);
+    return;
+  }
+  show('home');
+  armStart();
 })();
