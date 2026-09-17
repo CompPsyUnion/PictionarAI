@@ -519,8 +519,12 @@ footer {
   cursor: default;
 }
 
+/* The wrong pick is shown in a deeper red instead of being faded out, so it
+   stands out against the correct answer rather than receding behind it. */
 .verdict-button.missed {
-  opacity: .45;
+  --face: #d96b6b;
+  --edge: #a13f3f;
+  color: #fff;
 }
 
 .verdict-button.missed.ai {
@@ -542,30 +546,71 @@ footer {
 #judge {
   min-width: 255px;
   max-width: 100%;
+  position: relative;
 }
 
-.feedback {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 15px;
-  margin-top: 16px;
-  padding: 15px 20px;
-  border-radius: 10px;
-  background: #e6edda;
+/* After a group is scored the same button becomes Next. It turns green when
+   the whole group was right and red when it was not, so the verdict is
+   readable from the button alone.
+ *
+ *  The properties are set directly rather than through --face and --edge:
+ *  .primary hard-codes those colours instead of reading variables, so
+ *  overriding the variables alone would change nothing. */
+#judge.next {
+  background-color: var(--green);
+  border-color: var(--green-deep);
+  box-shadow: 0 4px 0 var(--green-deep);
 }
 
-.feedback p {
-  margin: 0;
-  line-height: 1.5;
-  flex: 1 1 220px;
-  min-width: 0;
-  text-align: center;
+/* Every state here sets background-color rather than the background shorthand.
+   The shorthand would wipe out the wash layer that #judge.next.wrong puts in
+   background-image, so hovering or pressing mid-count would erase it. */
+#judge.next:hover:not(:disabled) {
+  background-color: var(--green);
 }
 
-.feedback.wrong {
-  background: #f1e3d8;
+/* On a wrong answer a light wash fills the whole button as the automatic Next
+   approaches. The round clock is paused for the same three seconds, so
+   reading the verdict costs the participant no time.
+ *
+ *  The wash is a background layer rather than an overlay element: a pseudo
+ *  element would sit on top of the label and hide it, and pushing it behind
+ *  the label is not possible because the button's own background would then
+ *  cover it. Stretching the background layer from the left leaves the text
+ *  fully legible for the whole three seconds. */
+#judge.next.wrong {
+  background-color: #d96b6b;
+  background-image: linear-gradient(rgba(255, 255, 255, .38), rgba(255, 255, 255, .38));
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: 0% 100%;
+  border-color: #a13f3f;
+  box-shadow: 0 4px 0 #a13f3f;
+  color: #fff;
+}
+
+#judge.next.wrong:hover:not(:disabled) {
+  background-color: #d96b6b;
+}
+
+#judge.next.wrong.running {
+  background-size: 100% 100%;
+  /* --auto-next is set from config.yaml, so the wash always takes as long as
+     the round actually waits before moving on. */
+  transition: background-size var(--auto-next, 5s) linear;
+}
+
+/* The pressed state of .primary hard-codes the green shadow, which would show
+   a green edge under a red Next button. */
+#judge.next.wrong:active:not(:disabled),
+#judge.next.wrong.pressing:not(:disabled) {
+  box-shadow: 0 1px 0 #a13f3f;
+  background-color: #d96b6b;
+}
+
+#judge.next:active:not(:disabled),
+#judge.next.pressing:not(:disabled) {
+  box-shadow: 0 1px 0 var(--green-deep);
 }
 
 #result h1 {
@@ -622,20 +667,6 @@ footer {
 
   .group-frame {
     aspect-ratio: 1;
-  }
-
-  .feedback {
-    flex-direction: column;
-    text-align: center;
-    margin-top: 10px;
-    padding: 9px 12px;
-    gap: 8px;
-  }
-
-  .feedback p {
-    flex: 0 1 auto;
-    font-size: 13px;
-    line-height: 1.4;
   }
 
   .result-rounds {

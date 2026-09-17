@@ -1,9 +1,9 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const REVEAL_MS = 1000;
 const MANIFEST = 'pictures.json';
 let pictures = [], game = null, choices = [], currentGroup = [],
-    roundTimer = null, revealTimer = null, rules = { ...Quiz.DEFAULTS };
+    roundTimer = null, revealTimer = null, rules = { ...Quiz.DEFAULTS },
+    secondsLeft = 0;
 
 const startScreen = window.PICTIONARAI_START === 'library' ? 'library' : 'home';
 
@@ -145,6 +145,7 @@ function start() {
   if (pictures.length < requiredPictures()) return;
   if (!game) return;
   choices = []; revealTimer = null;
+  resetJudgeButton();
   const first = game.pending;
   warmUpcoming(game.remaining.slice(-rules.groupSize));
   show('game');
@@ -152,26 +153,41 @@ function start() {
   startTimer(rules.roundSeconds);
 }
 
+function renderTimer() {
+  const timer = $('timer');
+  if (!timer) return;
+  timer.textContent = secondsLeft;
+  timer.classList.toggle('urgent', secondsLeft <= 5);
+}
+
 function startTimer(seconds) {
   stopTimer();
-  let left = seconds;
-  const render = () => {
-    const timer = $('timer');
-    timer.textContent = left;
-    timer.classList.toggle('urgent', left <= 5);
-  };
-  render();
+  secondsLeft = seconds;
+  renderTimer();
   roundTimer = setInterval(() => {
-    left--;
+    secondsLeft--;
     // Running out of time is not an automatic loss: the target may already
     // have been reached, which is exactly how a round with early-pass off can
     // end. The verdict follows the round state, not the clock.
-    if (left <= 0) { stopTimer(); finish(Boolean(game) && Quiz.passed(game), true); return; }
-    render();
+    if (secondsLeft <= 0) { stopTimer(); finish(Boolean(game) && Quiz.passed(game), true); return; }
+    renderTimer();
   }, 1000);
 }
 
 function stopTimer() { clearInterval(roundTimer); roundTimer = null; }
+
+/** Stops the clock without ending the round, and restarts it from the same
+ *  second. A wrong answer pauses it so the verdict costs no time. */
+function pauseTimer() { clearInterval(roundTimer); roundTimer = null; }
+
+function resumeTimer() {
+  if (roundTimer || !game) return;
+  roundTimer = setInterval(() => {
+    secondsLeft--;
+    if (secondsLeft <= 0) { stopTimer(); finish(Quiz.passed(game), true); return; }
+    renderTimer();
+  }, 1000);
+}
 
 /** Builds one side of a card: its picture plus the AI / Real buttons. */
 function buildFace(picture, index, side) {
@@ -270,9 +286,6 @@ function renderGroup(group, groupIndex) {
   });
   container.append(...cards);
   layoutGroup(cards);
-  $('feedback').hidden = true;
-  $('feedback').className = 'feedback';
-  $('feedback-text').textContent = '';
   $('judge').disabled = true;
   updateJudge();
 }
@@ -306,12 +319,6 @@ function flipToGroup(cards, group, groupIndex) {
     currentGroup = group;
     choices = new Array(group.length).fill(null);
     $('round').textContent = `GROUP ${String(groupIndex + 1).padStart(2, '0')}`;
-    // The verdict belongs to the group that was just scored. It has to go at
-    // the same moment the new group appears, otherwise the old result stays
-    // on screen and reads as the result of the new, unanswered group.
-    $('feedback').hidden = true;
-    $('feedback').className = 'feedback';
-    $('feedback-text').textContent = '';
     $('judge').disabled = true;
     updateJudge();
     warmUpcoming(game ? game.remaining.slice(-rules.groupSize) : []);
@@ -334,33 +341,18 @@ function updateJudge() {
   $('judge').disabled = !ready;
 }
 
-/** Builds the line shown under the cards after a group is scored. Both modes
- *  share the headline; only the summary differs. */
-function feedbackText(result) {
-  const { groupSize, consecutive, groupsToPass, earlyPass, totalGroups } = rules;
-  const headline = `${result.correct} of ${groupSize} correct.`;
-  if (Quiz.doomed(game)) {
-    return `${headline} Too few groups left to reach ${groupsToPass}. The round ends here.`;
-  }
-  if (Quiz.finished(game)) {
-    return consecutive
-      ? `${headline} That is ${plural(groupsToPass, 'clean group')} in a row. You passed!`
-      : `${headline} You reached ${plural(groupsToPass, 'clean group')}. You passed!`;
-  }
-  // The target is met but the schedule still has groups left, which only
-  // happens when early-pass is off.
-  if (Quiz.passed(game) && !earlyPass && !consecutive) {
-    const played = game.results.length;
-    return `${headline} Target reached. ${totalGroups - played} more group${totalGroups - played === 1 ? '' : 's'} to play.`;
-  }
-  const left = consecutive ? groupsToPass - game.streak : groupsToPass - game.solved;
-  const target = consecutive ? `${plural(left, 'clean group')} in a row to pass` : `${plural(left, 'clean group')} still needed`;
-  if (!result.solved) {
-    return consecutive
-      ? `${headline} A single mistake resets your streak. ${left} to pass.`
-      : `${headline} That group does not count. ${target}.`;
-  }
-  return `${headline} ${target}.`;
+/** How long a clean group stays up before the round continues. A clean group
+ *  needs no reading time, so this is a short beat and is not configurable. */
+const CLEAN_REVEAL_MS = 1000;
+
+/** Advances the round after a verdict: either closes it or shows the next
+ *  group. Shared by the automatic timer and the Next button, and guarded so
+ *  the two cannot both fire. */
+function advance(cards) {
+  if (!game) return;
+  if (Quiz.finished(game)) { finish(Quiz.passed(game)); return; }
+  const next = Quiz.next(game);
+  flipToGroup(cards, next, game.results.length);
 }
 
 function judge() {
@@ -368,10 +360,6 @@ function judge() {
   const result = Quiz.answer(game, currentGroup, choices);
   if (!result) return;
   renderStreak();
-  $('feedback').className = result.solved ? 'feedback' : 'feedback wrong';
-  $('feedback-text').textContent = feedbackText(result);
-  $('feedback').hidden = false;
-  $('judge').disabled = true;
   const cards = [...$('group').children];
   cards.forEach((card, index) => {
     const truth = currentGroup[index].isAI;
@@ -384,15 +372,50 @@ function judge() {
     buttons.forEach(button => { button.disabled = true; });
   });
   warmUpcoming(game.remaining.slice(-rules.groupSize));
-  revealTimer = setTimeout(() => {
-    revealTimer = null;
-    // The verdict is settled once, when the round is actually over. With
-    // early-pass off, reaching the target mid-schedule does not end anything:
-    // the remaining groups still have to be played.
-    if (Quiz.finished(game)) { finish(Quiz.passed(game)); return; }
-    const next = Quiz.next(game);
-    flipToGroup(cards, next, game.results.length);
-  }, REVEAL_MS);
+
+  // The same button now leads to the next group rather than submitting.
+  const judgeButton = $('judge');
+  judgeButton.disabled = false;
+  judgeButton.textContent = 'Next';
+  judgeButton.classList.add('next');
+  judgeButton.classList.toggle('wrong', !result.solved);
+  const leave = () => {
+    clearTimeout(revealTimer); revealTimer = null;
+    // Hand the button back to judge(): the next group needs it to submit.
+    judgeButton.onclick = judge;
+    judgeButton.classList.remove('next', 'wrong', 'running');
+    judgeButton.disabled = true;
+    judgeButton.textContent = 'Submit';
+    // resumeTimer() ignores the call when the clock never stopped, so a
+    // round that keeps running on a wrong answer is not double-started.
+    resumeTimer();
+    advance(cards);
+  };
+  judgeButton.onclick = leave;
+
+  if (result.solved) {
+    // A clean group needs no reading time: it moves on after a short beat.
+    revealTimer = setTimeout(leave, CLEAN_REVEAL_MS);
+    return;
+  }
+  // Whether reading the verdict costs time is a setting of its own: pausing
+  // gives the mistake a fair look, while letting the clock run keeps the
+  // pressure on.
+  if (rules.pauseOnWrong) pauseTimer();
+  if (!rules.autoNext) {
+    // The round waits on the verdict until the participant presses Next.
+    return;
+  }
+  // The wash fills the button over exactly the wait before the automatic
+  // Next, so its length always matches what is about to happen.
+  judgeButton.style.setProperty('--auto-next', `${rules.autoNextDelay}s`);
+  // Reading offsetWidth makes the browser lay the wash out at zero width
+  // first. Adding the animated class in the same frame as the base class
+  // would collapse both values into one recalculation, and the wash would
+  // snap to full instead of stretching across.
+  void judgeButton.offsetWidth;
+  judgeButton.classList.add('running');
+  revealTimer = setTimeout(leave, rules.autoNextDelay * 1000);
 }
 
 /** Draws the score pill and the progress bar.
@@ -510,10 +533,23 @@ $('home-link').onclick = event => {
 };
 
 function bind(id, handler) { const element = $(id); if (element) element.onclick = handler; }
+
+/** Puts the action button back to its submitting state, so a round left while
+ *  a verdict was showing does not reopen with a stale Next button. */
+function resetJudgeButton() {
+  const button = $('judge');
+  if (!button) return;
+  button.onclick = judge;
+  button.classList.remove('next', 'wrong', 'running');
+  button.disabled = true;
+  button.textContent = 'Submit';
+}
+
 bind('start', start);
 bind('judge', judge);
 bind('abort', () => {
   stopTimer(); clearTimeout(revealTimer); revealTimer = null;
+  resetJudgeButton();
   game = null; currentGroup = []; choices = [];
   show('home');
   $('start').disabled = true;
@@ -521,6 +557,7 @@ bind('abort', () => {
   armStart();
 });
 bind('back-home', () => {
+  resetJudgeButton();
   game = null; currentGroup = []; choices = [];
   show('home');
   $('start').disabled = true;

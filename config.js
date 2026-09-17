@@ -12,7 +12,10 @@
     consecutive: true,
     groupsToPass: 2,
     totalGroups: 5,
-    earlyPass: true
+    earlyPass: true,
+    autoNext: true,
+    autoNextDelay: 5,
+    pauseOnWrong: true
   };
 
   function stripComment(line) {
@@ -65,7 +68,10 @@
       consecutive: typeof raw.consecutive === 'boolean' ? raw.consecutive : DEFAULTS.consecutive,
       groupsToPass: positive(target, DEFAULTS.groupsToPass),
       totalGroups: positive(raw['total-groups'], DEFAULTS.totalGroups),
-      earlyPass: typeof raw['early-pass'] === 'boolean' ? raw['early-pass'] : DEFAULTS.earlyPass
+      earlyPass: typeof raw['early-pass'] === 'boolean' ? raw['early-pass'] : DEFAULTS.earlyPass,
+      autoNext: typeof raw['auto-next'] === 'boolean' ? raw['auto-next'] : DEFAULTS.autoNext,
+      autoNextDelay: positive(raw['auto-next-delay'], DEFAULTS.autoNextDelay),
+      pauseOnWrong: typeof raw['pause-on-wrong'] === 'boolean' ? raw['pause-on-wrong'] : DEFAULTS.pauseOnWrong
     };
     // A fixed round cannot ask for more clean groups than it schedules.
     if (!rules.consecutive && rules.groupsToPass > rules.totalGroups) rules.groupsToPass = rules.totalGroups;
