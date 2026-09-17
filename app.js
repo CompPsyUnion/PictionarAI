@@ -1,10 +1,9 @@
 'use strict';
 const $ = id => document.getElementById(id);
-const ROUND_SECONDS = 60;
 const REVEAL_MS = 1000;
 const MANIFEST = 'pictures.json';
 let pictures = [], game = null, choices = [], currentGroup = [],
-    roundTimer = null, revealTimer = null;
+    roundTimer = null, revealTimer = null, rules = { ...Quiz.DEFAULTS };
 
 const startScreen = window.PICTIONARAI_START === 'library' ? 'library' : 'home';
 
@@ -58,6 +57,44 @@ function decodeGroup(group) {
   })));
 }
 
+/** How many pictures a round needs before it can start. A group is drawn
+ *  without repeats, so the pool has to cover every group the round will play.
+ *  Consecutive mode can play on indefinitely, so only the target it must
+ *  reach is counted. */
+function requiredPictures() {
+  const groups = rules.consecutive ? rules.groupsToPass : rules.totalGroups;
+  return rules.groupSize * groups;
+}
+
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
+
+/** Writes the rule lines that used to be hard-coded in the markup, so the
+ *  welcome text, the score pill and the footer always agree with config.yaml.
+ *  Called once the rules are loaded, before the welcome screen appears. */
+function applyRulesToMarkup() {
+  const { groupSize, roundSeconds, consecutive, groupsToPass, totalGroups } = rules;
+  // The grid is sized from the rules instead of a fixed column count, so a
+  // larger group wraps into rows instead of overflowing its container.
+  document.documentElement.style.setProperty('--group-columns', groupSize);
+  const rulesText = $('game-rules');
+  if (rulesText) {
+    const target = consecutive
+      ? `<strong>${plural(groupsToPass, 'clean group')} in a row</strong>`
+      : `<strong>${plural(groupsToPass, 'clean group')} out of ${totalGroups}</strong>`;
+    rulesText.innerHTML = `Each group shows <strong>${plural(groupSize, 'picture')}</strong>. <br>Choose <strong>AI</strong> or <strong>Real</strong> for every picture. <br>Get ${target} within <strong>${plural(roundSeconds, 'second')}</strong> to pass.${consecutive ? ' A wrong picture resets your streak.' : ''}`;
+  }
+  const scoreLabel = $('score-label'), scoreTarget = $('score-target'), timer = $('timer');
+  if (scoreLabel) scoreLabel.textContent = consecutive ? 'STREAK' : 'CLEAN';
+  if (scoreTarget) scoreTarget.textContent = groupsToPass;
+  if (timer) timer.textContent = roundSeconds;
+  const footer = $('footer-rules');
+  if (footer) {
+    footer.textContent = `${plural(groupSize, 'picture').toUpperCase()} PER GROUP · ${consecutive
+      ? `${plural(groupsToPass, 'clean group').toUpperCase()} IN A ROW`
+      : `${groupsToPass} OF ${totalGroups} GROUPS CLEAN`} · ${plural(roundSeconds, 'second').toUpperCase()}`;
+  }
+}
+
 /** Builds the round the start button will hand over and decodes its first
  *  group, then unlocks the button. The round is kept in `game`, so pressing
  *  start opens exactly the group that was decoded instead of reshuffling into
@@ -65,10 +102,10 @@ function decodeGroup(group) {
 async function armStart() {
   const startButton = $('start'), ready = $('ready');
   if (!startButton) return;
-  if (pictures.length < Quiz.MIN_PICTURES) return;
+  if (pictures.length < requiredPictures()) return;
   startButton.disabled = true;
   if (ready) { ready.hidden = false; ready.textContent = 'Loading the first pictures…'; }
-  game = Quiz.create(pictures);
+  game = Quiz.create(pictures, rules);
   const first = Quiz.next(game);
   await decodeGroup(first);
   if (!game) return;
@@ -78,10 +115,12 @@ async function armStart() {
 
 function refresh() {
   const startButton = $('start'), ready = $('ready');
-  if (startButton) startButton.disabled = pictures.length < Quiz.MIN_PICTURES;
+  const needed = requiredPictures();
+  const missing = needed - pictures.length;
+  if (startButton) startButton.disabled = pictures.length < needed;
   if (ready) {
-    ready.hidden = pictures.length >= Quiz.MIN_PICTURES;
-    ready.textContent = pictures.length >= Quiz.MIN_PICTURES ? '' : `Organizer: add ${Quiz.MIN_PICTURES - pictures.length} more picture${Quiz.MIN_PICTURES - pictures.length === 1 ? '' : 's'} to ${MANIFEST} to begin.`;
+    ready.hidden = pictures.length >= needed;
+    ready.textContent = pictures.length >= needed ? '' : `Organizer: add ${missing} more picture${missing === 1 ? '' : 's'} to ${MANIFEST} to begin.`;
   }
   const count = $('library-count'), gallery = $('gallery');
   if (!count || !gallery) return;
@@ -103,14 +142,14 @@ function refresh() {
 }
 
 function start() {
-  if (pictures.length < Quiz.MIN_PICTURES) return;
+  if (pictures.length < requiredPictures()) return;
   if (!game) return;
   choices = []; revealTimer = null;
   const first = game.pending;
-  warmUpcoming(game.remaining.slice(-Quiz.GROUP_SIZE));
+  warmUpcoming(game.remaining.slice(-rules.groupSize));
   show('game');
   renderGroup(first, 0);
-  startTimer(ROUND_SECONDS);
+  startTimer(rules.roundSeconds);
 }
 
 function startTimer(seconds) {
@@ -124,7 +163,10 @@ function startTimer(seconds) {
   render();
   roundTimer = setInterval(() => {
     left--;
-    if (left <= 0) { stopTimer(); finish(false); return; }
+    // Running out of time is not an automatic loss: the target may already
+    // have been reached, which is exactly how a round with early-pass off can
+    // end. The verdict follows the round state, not the clock.
+    if (left <= 0) { stopTimer(); finish(Boolean(game) && Quiz.passed(game), true); return; }
     render();
   }, 1000);
 }
@@ -151,6 +193,67 @@ function buildFace(picture, index, side) {
   return face;
 }
 
+/* A picture narrower than this is too small to judge, so the grid drops a
+   column rather than shrinking any further. A phone is held closer and shows
+   two cards side by side, so its floor is lower than a desk screen's, and its
+   narrower page margin leaves more room for them. */
+const MIN_CARD_WIDTH = 260;
+const MIN_CARD_WIDTH_PHONE = 140;
+const PHONE_WIDTH = 650;
+const PAGE_GUTTER = 64;
+const PAGE_GUTTER_PHONE = 32;
+const CARD_GAP = 16;
+const CARD_GAP_PHONE = 10;
+
+/** How many cards fit side by side at the current width. The configured group
+ *  size is the ceiling; the screen lowers it whenever a row of that many
+ *  would squeeze a picture below the floor for that screen. Working from the
+ *  available width instead of fixed breakpoints keeps the layout right on any
+ *  device, including the iPad sizes that sit between the usual breakpoints.
+ *
+ *  The count is written into --group-columns rather than expressed in CSS
+ *  because repeat() needs a plain integer, and an expression inside it is
+ *  not reliably supported. */
+function columnsFor(size) {
+  const width = window.innerWidth;
+  const phone = width <= PHONE_WIDTH;
+  const floor = phone ? MIN_CARD_WIDTH_PHONE : MIN_CARD_WIDTH;
+  const gap = phone ? CARD_GAP_PHONE : CARD_GAP;
+  const available = width - (phone ? PAGE_GUTTER_PHONE : PAGE_GUTTER);
+  const fits = Math.floor((available + gap) / (floor + gap));
+  return Math.max(1, Math.min(size, fits));
+}
+
+/** Applies the layout to the current group: how many columns to use, which
+ *  card ends up alone on the last row so it can be centred, and whether the
+ *  group holds a single picture and should take the full width.
+ *
+ *  A lone card is only possible when the columns do not divide the group
+ *  evenly, and never for a group of one, which has no row to share. */
+function layoutGroup(cards) {
+  const stage = $('group');
+  if (!stage) return;
+  const columns = cards.length ? columnsFor(cards.length) : rules.groupSize;
+  stage.style.setProperty('--group-columns', columns);
+  // The lone-card width in the stylesheet is derived from the gap, so the gap
+  // is written here too. It has to match what columnsFor() assumed, otherwise
+  // the measured width would not line up with the grid it sits in.
+  const phone = window.innerWidth <= PHONE_WIDTH;
+  stage.style.setProperty('--group-gap', `${phone ? CARD_GAP_PHONE : CARD_GAP}px`);
+  const lonely = cards.length > 1 && cards.length % columns === 1;
+  cards.forEach((card, index) => {
+    card.classList.toggle('lone', lonely && index === cards.length - 1);
+  });
+  stage.classList.toggle('single', cards.length === 1);
+}
+
+// Rotating a tablet or resizing the window changes how many cards fit on a
+// row, which changes whether one is left alone on the last row.
+window.addEventListener('resize', () => {
+  const cards = $('group') ? [...$('group').children] : [];
+  if (cards.length) layoutGroup(cards);
+});
+
 function renderGroup(group, groupIndex) {
   currentGroup = group;
   choices = new Array(group.length).fill(null);
@@ -158,15 +261,18 @@ function renderGroup(group, groupIndex) {
   renderStreak();
   const container = $('group');
   container.replaceChildren();
-  group.forEach((picture, index) => {
+  const cards = group.map((picture, index) => {
     const card = document.createElement('div'); card.className = 'group-card';
     const inner = document.createElement('div'); inner.className = 'card-inner';
     inner.append(buildFace(picture, index, 'front'));
     card.append(inner);
-    container.append(card);
+    return card;
   });
+  container.append(...cards);
+  layoutGroup(cards);
   $('feedback').hidden = true;
   $('feedback').className = 'feedback';
+  $('feedback-text').textContent = '';
   $('judge').disabled = true;
   updateJudge();
 }
@@ -196,12 +302,19 @@ function flipToGroup(cards, group, groupIndex) {
       void inner.offsetWidth;
       inner.classList.remove('no-flip');
     });
+    layoutGroup(cards);
     currentGroup = group;
     choices = new Array(group.length).fill(null);
     $('round').textContent = `GROUP ${String(groupIndex + 1).padStart(2, '0')}`;
+    // The verdict belongs to the group that was just scored. It has to go at
+    // the same moment the new group appears, otherwise the old result stays
+    // on screen and reads as the result of the new, unanswered group.
+    $('feedback').hidden = true;
+    $('feedback').className = 'feedback';
+    $('feedback-text').textContent = '';
     $('judge').disabled = true;
     updateJudge();
-    warmUpcoming(game ? game.remaining.slice(-Quiz.GROUP_SIZE) : []);
+    warmUpcoming(game ? game.remaining.slice(-rules.groupSize) : []);
   }, 620);
 }
 
@@ -221,14 +334,42 @@ function updateJudge() {
   $('judge').disabled = !ready;
 }
 
+/** Builds the line shown under the cards after a group is scored. Both modes
+ *  share the headline; only the summary differs. */
+function feedbackText(result) {
+  const { groupSize, consecutive, groupsToPass, earlyPass, totalGroups } = rules;
+  const headline = `${result.correct} of ${groupSize} correct.`;
+  if (Quiz.doomed(game)) {
+    return `${headline} Too few groups left to reach ${groupsToPass}. The round ends here.`;
+  }
+  if (Quiz.finished(game)) {
+    return consecutive
+      ? `${headline} That is ${plural(groupsToPass, 'clean group')} in a row. You passed!`
+      : `${headline} You reached ${plural(groupsToPass, 'clean group')}. You passed!`;
+  }
+  // The target is met but the schedule still has groups left, which only
+  // happens when early-pass is off.
+  if (Quiz.passed(game) && !earlyPass && !consecutive) {
+    const played = game.results.length;
+    return `${headline} Target reached. ${totalGroups - played} more group${totalGroups - played === 1 ? '' : 's'} to play.`;
+  }
+  const left = consecutive ? groupsToPass - game.streak : groupsToPass - game.solved;
+  const target = consecutive ? `${plural(left, 'clean group')} in a row to pass` : `${plural(left, 'clean group')} still needed`;
+  if (!result.solved) {
+    return consecutive
+      ? `${headline} A single mistake resets your streak. ${left} to pass.`
+      : `${headline} That group does not count. ${target}.`;
+  }
+  return `${headline} ${target}.`;
+}
+
 function judge() {
   if (revealTimer || !game) return;
   const result = Quiz.answer(game, currentGroup, choices);
   if (!result) return;
   renderStreak();
-  const best = game.results.length === 1 ? 'Best possible score.' : 'Keep it up.';
   $('feedback').className = result.solved ? 'feedback' : 'feedback wrong';
-  $('feedback-text').textContent = `${result.correct} of ${Quiz.GROUP_SIZE} correct. ${result.solved ? (Quiz.passed(game) ? 'Two clean groups! You passed!' : `${best} One more clean group to pass.`) : 'A single mistake resets your streak.'}`;
+  $('feedback-text').textContent = feedbackText(result);
   $('feedback').hidden = false;
   $('judge').disabled = true;
   const cards = [...$('group').children];
@@ -242,34 +383,78 @@ function judge() {
     if (!right) buttons.find(button => button !== truthButton).classList.add('missed');
     buttons.forEach(button => { button.disabled = true; });
   });
-  warmUpcoming(game.remaining.slice(-Quiz.GROUP_SIZE));
+  warmUpcoming(game.remaining.slice(-rules.groupSize));
   revealTimer = setTimeout(() => {
     revealTimer = null;
-    if (Quiz.passed(game)) { finish(true); return; }
+    // The verdict is settled once, when the round is actually over. With
+    // early-pass off, reaching the target mid-schedule does not end anything:
+    // the remaining groups still have to be played.
+    if (Quiz.finished(game)) { finish(Quiz.passed(game)); return; }
     const next = Quiz.next(game);
     flipToGroup(cards, next, game.results.length);
   }, REVEAL_MS);
 }
 
+/** Draws the score pill and the progress bar.
+ *
+ *  Consecutive mode shows the current streak, with one segment per clean
+ *  group still needed in a row: a mistake empties them again.
+ *
+ *  Fixed mode shows how many clean groups have been banked, with one segment
+ *  per scheduled group. Each played group keeps its own colour, green when it
+ *  was clean and red when it was not, so a miss is recorded rather than
+ *  resetting the bar. */
 function renderStreak() {
   const score = $('score'), progress = $('progress');
   if (!score || !progress) return;
-  score.textContent = game.streak;
-  progress.setAttribute('aria-label', `${game.streak} of ${Quiz.GROUPS_TO_PASS} consecutive correct groups`);
-  while (progress.childElementCount < Quiz.GROUPS_TO_PASS) progress.append(document.createElement('span'));
-  [...progress.children].forEach((item, index) => item.classList.toggle('correct', index < game.streak));
+  const { consecutive, totalGroups } = rules;
+  if (consecutive) {
+    const target = Quiz.targetGroups(game);
+    const filled = game.streak;
+    score.textContent = filled;
+    progress.setAttribute('aria-label', `${filled} of ${target} consecutive clean groups`);
+    while (progress.childElementCount < target) progress.append(document.createElement('span'));
+    while (progress.childElementCount > target) progress.lastElementChild.remove();
+    [...progress.children].forEach((item, index) => {
+      item.classList.toggle('correct', index < filled);
+      item.classList.remove('missed');
+    });
+    return;
+  }
+  score.textContent = game.solved;
+  progress.setAttribute('aria-label', `${game.solved} clean groups out of ${totalGroups}, ${game.results.length} played`);
+  while (progress.childElementCount < totalGroups) progress.append(document.createElement('span'));
+  while (progress.childElementCount > totalGroups) progress.lastElementChild.remove();
+  [...progress.children].forEach((item, index) => {
+    const played = game.results[index];
+    item.classList.toggle('correct', Boolean(played && played.solved));
+    item.classList.toggle('missed', Boolean(played && !played.solved));
+  });
 }
 
-function finish(passed) {
+/** Ends the round. `won` says whether the participant passed and `timedOut`
+ *  whether the clock is what stopped it, so the description can name the
+ *  actual reason instead of guessing from the screen. */
+function finish(won, timedOut = false) {
   stopTimer();
   clearTimeout(revealTimer); revealTimer = null;
-  $('result-title').textContent = passed ? 'Congratulations!' : 'Time is up';
-  $('result-description').textContent = passed
-    ? `You judged ${Quiz.GROUPS_TO_PASS} groups in a row without a mistake. Challenge passed!`
-    : 'The clock ran out before you cleared two groups. Try again!';
-  $('result-rounds').textContent = `${game.results.length} group${game.results.length === 1 ? '' : 's'} played · ${game.results.filter(r => r.solved).length} correct`;
+  const played = game.results.length;
+  const clean = game.results.filter(r => r.solved).length;
+  $('result-title').textContent = won ? 'Congratulations!' : 'Challenge failed';
+  if (won) {
+    $('result-description').textContent = rules.consecutive
+      ? `You judged ${rules.groupsToPass} groups in a row without a mistake. Challenge passed!`
+      : `You banked ${clean} of the ${rules.groupsToPass} clean groups needed. Challenge passed!`;
+  } else if (timedOut) {
+    $('result-description').textContent = `The clock ran out on ${clean} of the ${rules.groupsToPass} clean groups needed. Try again!`;
+  } else {
+    $('result-description').textContent = rules.consecutive
+      ? 'Too many mistakes in a row: the remaining groups cannot reach the target. Try again!'
+      : `You finished ${clean} of the ${rules.groupsToPass} clean groups needed. Try again!`;
+  }
+  $('result-rounds').textContent = `${played} group${played === 1 ? '' : 's'} played · ${clean} correct`;
   show('result');
-  if (passed) celebrate();
+  if (won) celebrate();
 }
 
 function celebrate() {
@@ -345,6 +530,8 @@ bind('back-home', () => {
 if (startScreen === 'library') show('library');
 
 (async () => {
+  rules = await Rules.load();
+  applyRulesToMarkup();
   pictures = await loadPictures();
   refresh();
   if (startScreen === 'library') {
