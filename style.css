@@ -327,6 +327,13 @@ footer {
   transform: scaleX(1);
 }
 
+/* Fixed mode records every scheduled group, so a group that was not clean
+   stays filled in red instead of emptying the bar. */
+.progress span.missed::after {
+  transform: scaleX(1);
+  background: #d98b7a;
+}
+
 .pill-divider {
   display: inline-block;
   width: 1px;
@@ -359,8 +366,21 @@ footer {
 
 .group {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  /* --group-columns is set by layoutGroup() from the rules and the screen
+     width, so changing group-size or rotating a device reshapes the grid
+     without touching this file. */
+  grid-template-columns: repeat(var(--group-columns, 3), 1fr);
+  gap: var(--group-gap, 16px);
+}
+
+/* When the columns do not divide the group evenly, the last card sits alone on
+   its own row. Spanning the row and capping the width keeps it the same size
+   as the cards above while centring it. The cap mirrors the grid maths: one
+   column out of N, minus the gaps between them. */
+.group-card.lone {
+  grid-column: 1 / -1;
+  width: calc((100% - (var(--group-columns, 3) - 1) * var(--group-gap, 16px)) / var(--group-columns, 3));
+  margin: 0 auto;
 }
 
 /* The card itself is only the perspective container. Its frame, fill and
@@ -425,6 +445,16 @@ footer {
   aspect-ratio: 4 / 3;
   background: #e8eadf;
   overflow: hidden;
+}
+
+/* A group of one picture spans the whole width, so on a tablet the 4:3 frame
+   grows taller than the rest of the stage. Capping its height keeps the
+   picture and the verdict buttons on screen together. The width is capped
+   instead of the height, so the frame keeps its 4:3 shape rather than being
+   squashed. */
+.group.single .group-frame {
+  width: min(100%, 62vh);
+  margin: 0 auto;
 }
 
 .group-frame img {
@@ -575,11 +605,6 @@ footer {
 
   .game-top .eyebrow {
     flex: 1 1 auto;
-  }
-
-  .group {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
   }
 
   .verdict {
@@ -749,10 +774,6 @@ footer {
 
   .game-top #abort {
     margin-left: auto;
-  }
-
-  .group {
-    gap: 8px;
   }
 
   .verdict-button {

@@ -1,8 +1,16 @@
 (function (root) {
   'use strict';
-  const GROUP_SIZE = 3;      // Pictures shown per group
-  const GROUPS_TO_PASS = 2;  // Consecutive fully-correct groups needed to pass
-  const MIN_PICTURES = 6;    // Two groups are drawn from distinct pictures
+
+  /* The rules come from config.yaml. These are the fallbacks used when the
+   * file cannot be read, so the values here should match the shipped file. */
+  const DEFAULTS = {
+    groupSize: 3,
+    roundSeconds: 60,
+    consecutive: true,
+    groupsToPass: 2,
+    totalGroups: 5,
+    earlyPass: true
+  };
 
   function shuffle(items, random) {
     const pool = [...items];
@@ -14,23 +22,35 @@
   }
 
   /**
-   * A round draws groups of three pictures. Pictures never repeat within a
-   * round: each draw takes from the unused remainder and only reshuffles the
-   * whole library once that remainder runs out.
+   * Opens a round with the given pictures and rules.
+   *
+   * `remaining` holds the pictures not yet handed out, so nothing repeats
+   * until the library is exhausted. `streak` counts clean groups in a row and
+   * `solved` counts clean groups overall: consecutive mode reads the first,
+   * fixed mode the second.
    */
-  function create(items, random = Math.random) {
-    if (items.length < MIN_PICTURES) throw new Error(`Add at least ${MIN_PICTURES} pictures before starting.`);
-    return { pool: [...items], random, remaining: shuffle(items, random), groups: [], results: [], pending: null, streak: 0 };
+  function create(items, rules = DEFAULTS, random = Math.random) {
+    const config = { ...DEFAULTS, ...rules };
+    return {
+      pool: [...items],
+      config,
+      random,
+      remaining: shuffle(items, random),
+      groups: [],
+      results: [],
+      pending: null,
+      streak: 0,
+      solved: 0
+    };
   }
 
-  /**
-   * Hands out the next group and marks it pending. Returns null once the round
-   * is passed, so a caller can never draw past the finishing line.
-   */
+  /** Hands out the next group and marks it pending. Returns null when the
+   *  round is over, so a caller can never draw past the finishing line. */
   function next(game) {
-    if (passed(game)) return null;
+    if (finished(game)) return null;
+    const size = game.config.groupSize;
     const group = [];
-    while (group.length < GROUP_SIZE) {
+    while (group.length < size) {
       if (game.remaining.length === 0) game.remaining = shuffle(game.pool, game.random);
       group.push(game.remaining.pop());
     }
@@ -44,19 +64,66 @@
    * scored twice no matter how often the caller submits it.
    */
   function answer(game, group, choices) {
-    if (!group || group !== game.pending || group.length !== GROUP_SIZE) return null;
+    if (!group || group !== game.pending || group.length !== game.config.groupSize) return null;
     const correct = group.filter((picture, index) => picture.isAI === choices[index]).length;
-    const solved = correct === GROUP_SIZE;
+    const clean = correct === game.config.groupSize;
     game.groups.push(group);
-    game.results.push({ correct, solved });
+    game.results.push({ correct, solved: clean });
     game.pending = null;
-    game.streak = solved ? game.streak + 1 : 0;
-    return { correct, solved };
+    game.streak = clean ? game.streak + 1 : 0;
+    if (clean) game.solved++;
+    return { correct, solved: clean };
   }
 
-  function passed(game) { return game.streak >= GROUPS_TO_PASS; }
+  /** True once the participant has already done enough to pass. Both modes
+   *  aim at the same number of clean groups: consecutive mode needs them in a
+   *  row, fixed mode only needs them to add up. */
+  function passed(game) {
+    const config = game.config;
+    return config.consecutive ? game.streak >= config.groupsToPass : game.solved >= config.groupsToPass;
+  }
 
-  const api = { GROUP_SIZE, GROUPS_TO_PASS, MIN_PICTURES, create, answer, next, passed };
+  /** True once the round cannot be won, so the caller can end it early rather
+   *  than making the participant play groups that no longer matter. With no
+   *  groups played yet, a round is never unwinnable. */
+  function doomed(game) {
+    const config = game.config;
+    if (config.consecutive) return false;
+    const left = config.totalGroups - game.results.length;
+    return game.solved + left < config.groupsToPass;
+  }
+
+  /** True when the round is over for any reason: passed, out of groups, or no
+   *  longer winnable.
+   *
+   *  In fixed mode reaching the target only ends the round when early-pass is
+   *  on. With it off the schedule plays out in full, so the participant keeps
+   *  going even after banking enough clean groups. A round that can no longer
+   *  reach the target always stops, because the remaining groups would decide
+   *  nothing. */
+  function finished(game) {
+    const config = game.config;
+    if (doomed(game)) return true;
+    if (config.consecutive) return passed(game);
+    if (config.earlyPass && passed(game)) return true;
+    return game.results.length >= config.totalGroups;
+  }
+
+  /** How many segments the progress bar needs: one per clean group still
+   *  needed in consecutive mode, or one per scheduled group in fixed mode,
+   *  where every group is recorded whether it was clean or not. */
+  function targetGroups(game) {
+    const config = game.config;
+    return config.consecutive ? config.groupsToPass : config.totalGroups;
+  }
+
+  /** The value the progress bar fills towards: clean groups in a row, or
+   *  clean groups overall. */
+  function progress(game) {
+    return game.config.consecutive ? game.streak : game.solved;
+  }
+
+  const api = { DEFAULTS, create, answer, next, passed, doomed, finished, targetGroups, progress };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Quiz = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
