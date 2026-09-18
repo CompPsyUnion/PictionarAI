@@ -148,6 +148,29 @@ assert.equal(Rules.normalise({ 'early-pass': 'maybe' }).earlyPass, Rules.DEFAULT
 assert.equal(Rules.normalise({ 'early-pass': false }).earlyPass, false, 'A false early-pass is honoured');
 assert.equal(Rules.parse('early-pass: false')['early-pass'], false, 'The parser reads early-pass as a boolean');
 
+// --- auto-next -------------------------------------------------------------
+
+// auto-next decides whether a wrong verdict moves on by itself, and
+// auto-next-delay how long it waits. The delay is also how long the wash
+// across the button takes, so a nonsense value must not reach the stylesheet.
+assert.equal(Rules.DEFAULTS.autoNext, true, 'A wrong verdict continues by itself unless told otherwise');
+assert.equal(Rules.normalise({ 'auto-next': false }).autoNext, false, 'A false auto-next is honoured');
+assert.equal(Rules.normalise({ 'auto-next': 'no' }).autoNext, Rules.DEFAULTS.autoNext, 'A non-boolean auto-next falls back to the default');
+assert.equal(Rules.parse('auto-next: false')['auto-next'], false, 'The parser reads auto-next as a boolean');
+assert.equal(Rules.normalise({ 'auto-next-delay': 7 }).autoNextDelay, 7, 'auto-next-delay sets the wait');
+assert.equal(Rules.normalise({ 'auto-next-delay': 0 }).autoNextDelay, Rules.DEFAULTS.autoNextDelay, 'A zero delay falls back, because it would leave no verdict to read');
+assert.equal(Rules.normalise({ 'auto-next-delay': 'soon' }).autoNextDelay, Rules.DEFAULTS.autoNextDelay, 'An unusable delay falls back to the default');
+
+// pause-on-wrong is independent of auto-next: it can pause a verdict that
+// continues by itself, and it can leave the clock running on one that waits.
+assert.equal(Rules.DEFAULTS.pauseOnWrong, true, 'The clock stops on a wrong verdict unless told otherwise');
+assert.equal(Rules.normalise({ 'pause-on-wrong': false }).pauseOnWrong, false, 'A false pause-on-wrong is honoured');
+assert.equal(Rules.normalise({ 'pause-on-wrong': 'nah' }).pauseOnWrong, Rules.DEFAULTS.pauseOnWrong, 'A non-boolean pause-on-wrong falls back to the default');
+assert.equal(Rules.parse('pause-on-wrong: false')['pause-on-wrong'], false, 'The parser reads pause-on-wrong as a boolean');
+const timing = Rules.normalise({ 'auto-next': false, 'pause-on-wrong': false });
+assert.equal(timing.autoNext, false, 'The two timing settings do not affect each other');
+assert.equal(timing.pauseOnWrong, false, 'A verdict can wait for Next while the clock keeps running');
+
 // The progress bar reports clean groups in a row, or clean groups overall.
 assert.equal(Quiz.targetGroups(play([], CONSECUTIVE)), CONSECUTIVE.groupsToPass, 'The target is the streak length in consecutive mode');
 assert.equal(Quiz.targetGroups(play([], FIXED)), FIXED.totalGroups, 'The bar shows one segment per scheduled group in fixed mode');

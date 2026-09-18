@@ -2,7 +2,7 @@
 # Edit the values below and reload the page: no rebuild or redeploy is needed.
 
 # How many pictures a participant judges at once.
-group-size: 3
+group-size: 2
 
 # How long a round lasts, in seconds.
 round-seconds: 60
@@ -24,3 +24,17 @@ total-groups: 5
 # target is reached; false plays out every scheduled group and decides at the
 # end. A round that can no longer reach the target ends early either way.
 early-pass: true
+
+# After a wrong answer, whether the round moves on by itself. true waits for
+# auto-next-delay and then continues; false stops on the verdict until the
+# participant presses Next. A clean group always continues by itself.
+auto-next: true
+
+# Only read when auto-next is true: how many seconds the verdict stays up
+# before the round continues.
+auto-next-delay: 10
+
+# Whether the clock stops while a wrong verdict is on screen. true gives the
+# participant free time to study the mistake; false keeps the pressure on and
+# the seconds spent reading are lost.
+pause-on-wrong: true

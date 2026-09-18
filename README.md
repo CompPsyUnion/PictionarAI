@@ -4,10 +4,10 @@ An offline quiz for the HELLO FESTIVAL booth: participants look at photographs a
 
 ## Rules
 
-Each group shows **three pictures** at a time. The participant picks **AI** or **Real** for every picture in the group, then presses **Submit** to score the whole group at once.
+Each group shows a few pictures at a time. The participant picks **AI** or **Real** for every picture in the group, then presses **Submit** to score the whole group at once.
 
-- A group counts as clean only when **all three** pictures are judged correctly.
-- **Two clean groups in a row** passes the challenge.
+- A group is cleared only when **every** picture in it is judged correctly.
+- **Two cleared groups in a row** passes the challenge.
 - Any single mistake resets the streak to zero.
 - Each round runs on a **60 second** clock; when it reaches zero the round ends.
 
@@ -77,4 +77,4 @@ The scoring engine is covered by a small test script:
 node scripts/test-quiz.cjs
 ```
 
-It checks that two clean groups pass a round, that a partly correct group resets the streak, that pictures do not repeat while the library lasts, and that a group cannot be scored twice.****___
+It checks that two clean groups pass a round, that a partly correct group resets the streak, that pictures do not repeat while the library lasts, and that a group cannot be scored twice.
