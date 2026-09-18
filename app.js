@@ -79,19 +79,19 @@ function applyRulesToMarkup() {
   const rulesText = $('game-rules');
   if (rulesText) {
     const target = consecutive
-      ? `<strong>${plural(groupsToPass, 'clean group')} in a row</strong>`
-      : `<strong>${plural(groupsToPass, 'clean group')} out of ${totalGroups}</strong>`;
-    rulesText.innerHTML = `Each group shows <strong>${plural(groupSize, 'picture')}</strong>. <br>Choose <strong>AI</strong> or <strong>Real</strong> for every picture. <br>Get ${target} within <strong>${plural(roundSeconds, 'second')}</strong> to pass.${consecutive ? ' A wrong picture resets your streak.' : ''}`;
+      ? `<strong>${plural(groupsToPass, 'group')} in a row</strong>`
+      : `<strong>${plural(groupsToPass, 'group')} out of ${totalGroups}</strong>`;
+    rulesText.innerHTML = `Each group shows <strong>${plural(groupSize, 'picture')}</strong>. <br>Choose <strong>AI</strong> or <strong>Real</strong> for every picture — get them <strong>all right</strong> to clear the group. <br>Clear ${target} within <strong>${plural(roundSeconds, 'second')}</strong> to pass.${consecutive ? '<br>One wrong answer resets your streak.' : ''}`;
   }
   const scoreLabel = $('score-label'), scoreTarget = $('score-target'), timer = $('timer');
-  if (scoreLabel) scoreLabel.textContent = consecutive ? 'STREAK' : 'CLEAN';
+  if (scoreLabel) scoreLabel.textContent = consecutive ? 'STREAK' : 'CLEARED';
   if (scoreTarget) scoreTarget.textContent = groupsToPass;
   if (timer) timer.textContent = roundSeconds;
   const footer = $('footer-rules');
   if (footer) {
     footer.textContent = `${plural(groupSize, 'picture').toUpperCase()} PER GROUP · ${consecutive
-      ? `${plural(groupsToPass, 'clean group').toUpperCase()} IN A ROW`
-      : `${groupsToPass} OF ${totalGroups} GROUPS CLEAN`} · ${plural(roundSeconds, 'second').toUpperCase()}`;
+      ? `${plural(groupsToPass, 'group').toUpperCase()} IN A ROW`
+      : `${groupsToPass} OF ${totalGroups} GROUPS CLEARED`} · ${plural(roundSeconds, 'second').toUpperCase()}`;
   }
 }
 
@@ -435,7 +435,7 @@ function renderStreak() {
     const target = Quiz.targetGroups(game);
     const filled = game.streak;
     score.textContent = filled;
-    progress.setAttribute('aria-label', `${filled} of ${target} consecutive clean groups`);
+    progress.setAttribute('aria-label', `${filled} of ${target} consecutive groups cleared`);
     while (progress.childElementCount < target) progress.append(document.createElement('span'));
     while (progress.childElementCount > target) progress.lastElementChild.remove();
     [...progress.children].forEach((item, index) => {
@@ -445,7 +445,7 @@ function renderStreak() {
     return;
   }
   score.textContent = game.solved;
-  progress.setAttribute('aria-label', `${game.solved} clean groups out of ${totalGroups}, ${game.results.length} played`);
+  progress.setAttribute('aria-label', `${game.solved} groups cleared out of ${totalGroups}, ${game.results.length} played`);
   while (progress.childElementCount < totalGroups) progress.append(document.createElement('span'));
   while (progress.childElementCount > totalGroups) progress.lastElementChild.remove();
   [...progress.children].forEach((item, index) => {
@@ -462,20 +462,20 @@ function finish(won, timedOut = false) {
   stopTimer();
   clearTimeout(revealTimer); revealTimer = null;
   const played = game.results.length;
-  const clean = game.results.filter(r => r.solved).length;
+  const cleared = game.results.filter(r => r.solved).length;
   $('result-title').textContent = won ? 'Congratulations!' : 'Challenge failed';
   if (won) {
     $('result-description').textContent = rules.consecutive
       ? `You judged ${rules.groupsToPass} groups in a row without a mistake. Challenge passed!`
-      : `You banked ${clean} of the ${rules.groupsToPass} clean groups needed. Challenge passed!`;
+      : `You cleared ${cleared} of the ${rules.groupsToPass} groups needed. Challenge passed!`;
   } else if (timedOut) {
-    $('result-description').textContent = `The clock ran out on ${clean} of the ${rules.groupsToPass} clean groups needed. Try again!`;
+    $('result-description').textContent = `The clock ran out with ${cleared} of the ${rules.groupsToPass} groups cleared. Try again!`;
   } else {
     $('result-description').textContent = rules.consecutive
       ? 'Too many mistakes in a row: the remaining groups cannot reach the target. Try again!'
-      : `You finished ${clean} of the ${rules.groupsToPass} clean groups needed. Try again!`;
+      : `You finished with ${cleared} of the ${rules.groupsToPass} groups cleared. Try again!`;
   }
-  $('result-rounds').textContent = `${played} group${played === 1 ? '' : 's'} played · ${clean} correct`;
+  $('result-rounds').textContent = `${played} group${played === 1 ? '' : 's'} played · ${cleared} correct`;
   show('result');
   if (won) celebrate();
 }
