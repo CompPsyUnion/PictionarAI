@@ -2,7 +2,7 @@
 # Edit the values below and reload the page: no rebuild or redeploy is needed.
 
 # How many pictures a participant judges at once.
-group-size: 3
+group-size: 2
 
 # How long a round lasts, in seconds.
 round-seconds: 60
