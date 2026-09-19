@@ -5,7 +5,7 @@
 group-size: 2
 
 # How long a round lasts, in seconds.
-round-seconds: 60
+round-seconds: 120
 
 # true  = clean groups must come one after another; any mistake resets the
 #         count, so the participant starts the run again.
