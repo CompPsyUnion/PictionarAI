@@ -368,7 +368,11 @@ function judge() {
     const truthButton = card.querySelector(truth ? '.verdict-button.ai' : '.verdict-button.real');
     const buttons = [...card.querySelectorAll('.verdict-button')];
     truthButton.classList.add('answer');
-    if (!right) buttons.find(button => button !== truthButton).classList.add('missed');
+    // The second option is either the one that was picked and got it wrong,
+    // shown in red, or the one that was not picked on a correct card, which is
+    // dimmed so the green pick stands alone.
+    const other = buttons.find(button => button !== truthButton);
+    other.classList.add(right ? 'dimmed' : 'missed');
     buttons.forEach(button => { button.disabled = true; });
   });
   warmUpcoming(game.remaining.slice(-rules.groupSize));

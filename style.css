@@ -426,6 +426,23 @@ footer {
   background: #f7ebe0;
 }
 
+/* A wrong card shakes once as the verdict appears, so the card that was
+   missed is obvious at a glance. The class is cleared as the round moves on
+   and set again on the next miss, which replays the animation each time.
+   Only translateX is used: the card is also a perspective container, and
+   rotating it here would fight the flip that comes a moment later. */
+@keyframes card-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(7px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
+
+.group-card.wrong {
+  animation: card-shake .45s ease-in-out;
+}
+
 /* The reverse carries the next group's picture and buttons, so it mirrors
    the front exactly and only differs by being rotated away. */
 .card-front,
@@ -519,22 +536,21 @@ footer {
   cursor: default;
 }
 
-/* The wrong pick is shown in a deeper red instead of being faded out, so it
-   stands out against the correct answer rather than receding behind it. */
+/* The wrong pick is painted the same red as a failed Next button, so the two
+   read as the same verdict rather than as two different states. */
 .verdict-button.missed {
   --face: #d96b6b;
   --edge: #a13f3f;
   color: #fff;
 }
 
-.verdict-button.missed.ai {
-  --face: #f6cfcf;
-  --edge: #c98a8a;
-}
-
-.verdict-button.missed.real {
-  --face: #ccdcf2;
-  --edge: #8aa8ce;
+/* On a card that was answered correctly, the option that was not picked is
+   dimmed rather than left in its pastel colour. A pastel button still reads
+   as a live choice, so dimming it leaves the green pick standing alone. */
+.verdict-button.dimmed {
+  --face: #e3e3db;
+  --edge: #c1c1b7;
+  color: #8c8c81;
 }
 
 .actions {
