@@ -30,6 +30,7 @@
   "assets/pics/ai/29.png": true,
   "assets/pics/ai/30.png": true,
   "assets/pics/ai/31.jpg": true,
+  "assets/pics/ai/32.png": true,
   "assets/pics/real/01.jpg": false,
   "assets/pics/real/02.jpg": false,
   "assets/pics/real/03.jpg": false,
@@ -53,5 +54,6 @@
   "assets/pics/real/21.jpg": false,
   "assets/pics/real/22.jpg": false,
   "assets/pics/real/23.jpg": false,
-  "assets/pics/real/24.jpg": false
+  "assets/pics/real/24.jpg": false,
+  "assets/pics/real/25.png": false,
 }
